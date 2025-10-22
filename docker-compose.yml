@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  polymarket-insider:
+    build: .
+    container_name: polymarket-insider
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "polymarket_insider"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

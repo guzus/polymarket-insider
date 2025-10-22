@@ -1,0 +1,8 @@
+# Polymarket Insider Health Check Cron Job
+# This cron job runs health checks every 5 minutes
+
+# Run health check every 5 minutes and restart if needed
+*/5 * * * * /root/polymarket-insider/scripts/health-check.sh auto >> /root/polymarket-insider/logs/health-cron.log 2>&1
+
+# Run comprehensive health check every hour
+0 * * * * /root/polymarket-insider/scripts/health-check.sh manual >> /root/polymarket-insider/logs/health-hourly.log 2>&1

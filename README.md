@@ -101,6 +101,149 @@ uv sync --dev
 python -m polymarket_insider
 ```
 
+## Deployment
+
+### Docker Deployment (Recommended for Production)
+
+**Prerequisites:**
+- Docker and Docker Compose installed
+- `.env` file configured with your settings
+
+#### Quick Start
+
+```bash
+# Clone and setup
+git clone https://github.com/guzus/polymarket-insider.git
+cd polymarket-insider
+cp .env.example .env
+# Edit .env with your configuration
+
+# Deploy using the deployment script
+./scripts/deploy.sh docker
+
+# Or manually
+docker-compose up -d
+```
+
+#### Deployment Scripts
+
+The repository includes a comprehensive deployment script:
+
+```bash
+# Deploy with Docker (production)
+./scripts/deploy.sh docker
+
+# Deploy locally for development
+./scripts/deploy.sh local
+
+# Update running container
+./scripts/deploy.sh update
+
+# Stop the application
+./scripts/deploy.sh stop
+
+# View logs
+./scripts/deploy.sh logs
+
+# Check container status
+./scripts/deploy.sh status
+```
+
+#### Health Monitoring
+
+```bash
+# Run health check
+./scripts/health-check.sh
+
+# Set up automated health checks (every 5 minutes)
+crontab cron/health-check.cron
+```
+
+### Kubernetes Deployment
+
+For production Kubernetes environments:
+
+```bash
+# Update secrets with your actual values
+echo -n "your_telegram_bot_token" | base64
+echo -n "your_chat_id" | base64
+
+# Edit k8s/secrets.yaml with the encoded values
+
+# Deploy to Kubernetes
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+### Monitoring Stack
+
+Optional monitoring with Prometheus and Grafana:
+
+```bash
+# Start monitoring stack
+cd monitoring
+docker-compose -f docker-compose.monitoring.yml up -d
+
+# Access Grafana at http://localhost:3001 (admin/admin123)
+# Access Prometheus at http://localhost:9090
+```
+
+#### Environment Variables for Production
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | Required |
+| `TELEGRAM_CHAT_ID` | Your Telegram chat ID | Required |
+| `POLYMARKET_API_URL` | Polymarket API endpoint | `https://clob.polymarket.com` |
+| `POLYMARKET_WS_URL` | Polymarket WebSocket URL | `wss://ws_clob.polymarket.com` |
+| `MIN_TRADE_SIZE_USD` | Minimum trade size for alerts | `10000` |
+| `FUNDING_LOOKBACK_HOURS` | Hours to look back for funding | `24` |
+| `TRADE_HISTORY_CHECK_DAYS` | Days to check trade history | `30` |
+| `LOG_LEVEL` | Logging level | `INFO` |
+
+### Production Deployment Checklist
+
+- [ ] Configure `.env` with production values
+- [ ] Set up Telegram bot and get token/chat ID
+- [ ] Configure monitoring and alerting
+- [ ] Set up log rotation
+- [ ] Configure backup strategy
+- [ ] Set up automated health checks
+- [ ] Review resource limits and scaling
+- [ ] Test deployment in staging environment first
+
+### Cloud Deployment
+
+#### AWS ECS
+
+1. Build and push to ECR:
+```bash
+aws ecr create-repository --repository-name polymarket-insider
+docker build -t polymarket-insider .
+docker tag polymarket-insider:latest <aws-account-id>.dkr.ecr.<region>.amazonaws.com/polymarket-insider:latest
+docker push <aws-account-id>.dkr.ecr.<region>.amazonaws.com/polymarket-insider:latest
+```
+
+2. Deploy using ECS Task Definition with environment variables
+
+#### Google Cloud Run
+
+```bash
+gcloud builds submit --tag gcr.io/PROJECT_ID/polymarket-insider
+gcloud run deploy --image gcr.io/PROJECT_ID/polymarket-insider --platform managed
+```
+
+#### DigitalOcean App Platform
+
+1. Connect repository to App Platform
+2. Configure environment variables in App Platform settings
+3. Deploy with automatic build and deployment
+python -m polymarket_insider
+```
+
 ## Alert Types
 
 The bot detects and alerts on several suspicious patterns:

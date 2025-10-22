@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polymarket-insider
+  labels:
+    app: polymarket-insider
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: polymarket-insider
+  template:
+    metadata:
+      labels:
+        app: polymarket-insider
+    spec:
+      containers:
+      - name: polymarket-insider
+        image: polymarket-insider:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: POLYMARKET_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: POLYMARKET_API_URL
+        - name: POLYMARKET_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: POLYMARKET_WS_URL
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: polymarket-insider-secrets
+              key: TELEGRAM_BOT_TOKEN
+        - name: TELEGRAM_CHAT_ID
+          valueFrom:
+            secretKeyRef:
+              name: polymarket-insider-secrets
+              key: TELEGRAM_CHAT_ID
+        - name: MIN_TRADE_SIZE_USD
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: MIN_TRADE_SIZE_USD
+        - name: FUNDING_LOOKBACK_HOURS
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: FUNDING_LOOKBACK_HOURS
+        - name: TRADE_HISTORY_CHECK_DAYS
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: TRADE_HISTORY_CHECK_DAYS
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: polymarket-insider-config
+              key: LOG_LEVEL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pgrep
+            - -f
+            - polymarket_insider
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pgrep
+            - -f
+            - polymarket_insider
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      restartPolicy: Always
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: polymarket-insider-logs-pvc
