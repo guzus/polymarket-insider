@@ -93,8 +93,13 @@ class LargeTradeMonitor:
             # Get taker information
             taker_address = trade.get('taker', '')
             taker_info = None
+            taker_profile_url = ''
             if taker_address:
-                taker_info = await self.data_api_client.get_trader_summary(taker_address)
+                result = await self.data_api_client.get_trader_summary(taker_address)
+                if isinstance(result, tuple) and len(result) == 2:
+                    taker_info, taker_profile_url = result
+                else:
+                    taker_info = result
 
             # Calculate trade size in USD
             trade_size_usd = self.goldsky_client.format_trade_usd(enriched_trade)
@@ -108,12 +113,12 @@ class LargeTradeMonitor:
             logger.info(f"New large trade detected: ${trade_size_usd:,.2f} - {trade_type} {outcome} - {market_name} - Taker: {taker_display} - TX: {tx_hash}")
 
             # Send Telegram alert
-            await self._send_alert(enriched_trade, trade_size_usd, taker_info)
+            await self._send_alert(enriched_trade, trade_size_usd, taker_info, taker_profile_url)
 
         except Exception as e:
             logger.error(f"Error processing trade: {e}")
 
-    async def _send_alert(self, trade: Dict[str, Any], trade_size_usd: float, taker_info: Optional[str] = None) -> None:
+    async def _send_alert(self, trade: Dict[str, Any], trade_size_usd: float, taker_info: Optional[str] = None, taker_profile_url: str = '') -> None:
         """Send Telegram alert for a large trade."""
         try:
             # Extract trade details
@@ -148,9 +153,20 @@ class LargeTradeMonitor:
 
             # Format taker information
             if taker_info and taker_info != f"Unknown Trader (`{taker[:10]}...{taker[-8:]}`)":
-                taker_display = f"• {taker_info}\n• `{taker[:10]}...{taker[-8:]}`"
+                taker_lines = [f"• {taker_info}"]
+
+                # Add profile link if available
+                if taker_profile_url:
+                    taker_lines.append(f"• [View Profile]({taker_profile_url})")
+
+                taker_lines.append(f"• `{taker[:10]}...{taker[-8:]}`")
+                taker_display = '\n'.join(taker_lines)
             else:
                 taker_display = f"• `{taker[:10]}...{taker[-8:]}`"
+
+                # Add profile link even for unknown traders
+                if taker_profile_url:
+                    taker_display += f"\n• [View Profile]({taker_profile_url})"
 
             message = f"""{trade_emoji} **LARGE TRADE ALERT** {trade_emoji}
 

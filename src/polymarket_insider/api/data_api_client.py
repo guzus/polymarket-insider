@@ -84,6 +84,7 @@ class DataAPIClient:
                 'bio': latest_trade.get('bio', ''),
                 'profile_image': latest_trade.get('profileImage', ''),
                 'profile_image_optimized': latest_trade.get('profileImageOptimized', ''),
+                'profile_url': f"https://polymarket.com/profile/{user_address.lower()}",
                 'recent_trades_count': len(trades),
                 'first_trade_date': None,
                 'last_trade_date': None,
@@ -216,7 +217,7 @@ class DataAPIClient:
         else:
             activity_summary = ""
 
-        return f"{display_name}{activity_summary}"
+        return f"{display_name}{activity_summary}", trader_info.get('profile_url', '')
 
     def cleanup_cache(self) -> None:
         """Clean up old entries from the cache."""
