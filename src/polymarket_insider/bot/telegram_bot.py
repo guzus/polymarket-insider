@@ -39,6 +39,10 @@ class TelegramAlertBot:
 
         return self._app
 
+    def is_initialized(self) -> bool:
+        """Check if the bot is initialized."""
+        return self._app is not None
+
     async def send_alert(self, alert: SuspiciousTradeAlert) -> bool:
         """Send a suspicious trade alert."""
         try:

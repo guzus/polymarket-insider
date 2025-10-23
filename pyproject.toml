@@ -17,6 +17,7 @@ dependencies = [
     "eth-utils>=2.0.0",
     "asyncio-mqtt>=0.16.0",
     "websockets>=12.0",
+    "click>=8.0.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-polymarket-insider = "polymarket_insider.main:cli_main"
+polymarket-insider = "polymarket_insider.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -28,9 +28,10 @@ class SuspiciousTradeDetector:
 
     def __init__(self):
         """Initialize the detector."""
-        self.min_trade_size = settings.min_trade_size_usd
+        self.min_trade_size_usd = settings.min_trade_size_usd
         self.funding_lookback_hours = settings.funding_lookback_hours
         self.trade_history_check_days = settings.trade_history_check_days
+        self.max_processed_trades = settings.max_processed_trades
 
         # Track processed trades to avoid duplicate alerts
         self.processed_trades: Set[str] = set()
@@ -51,7 +52,7 @@ class SuspiciousTradeDetector:
         self.processed_trades.add(trade_key)
 
         # Check 1: Large trade size
-        if trade.usd_size and trade.usd_size >= self.min_trade_size:
+        if trade.usd_size and trade.usd_size >= self.min_trade_size_usd:
             alert = await self._check_large_trade_patterns(trade, funding_history, trade_history)
             if alert:
                 return alert
@@ -74,14 +75,14 @@ class SuspiciousTradeDetector:
                                          trade_history: WalletTradeHistory) -> Optional[SuspiciousTradeAlert]:
         """Check for patterns in large trades."""
 
-        if not trade.usd_size or trade.usd_size < self.min_trade_size:
+        if not trade.usd_size or trade.usd_size < self.min_trade_size_usd:
             return None
 
         # Primary wallet to check (maker or taker)
         wallet_address = trade.maker if trade.side == "BUY" else trade.taker
 
         # Calculate confidence based on trade size and wallet behavior
-        confidence = min(0.3 + (trade.usd_size / self.min_trade_size) * 0.2, 0.9)
+        confidence = min(0.3 + (trade.usd_size / self.min_trade_size_usd) * 0.2, 0.9)
 
         reason_parts = [f"Large trade: ${trade.usd_size:,.2f}"]
 
@@ -140,9 +141,9 @@ class SuspiciousTradeDetector:
         elif hours_since_funding <= 24:
             confidence += 0.2
 
-        if recent_funding.amount >= self.min_trade_size:
+        if recent_funding.amount >= self.min_trade_size_usd:
             confidence += 0.3
-        elif recent_funding.amount >= self.min_trade_size * 0.5:
+        elif recent_funding.amount >= self.min_trade_size_usd * 0.5:
             confidence += 0.2
 
         if confidence < 0.5:
@@ -226,6 +227,6 @@ class SuspiciousTradeDetector:
 
         # This is simplified - in practice you'd need to track timestamps
         # For now, just keep the cache size reasonable
-        if len(self.processed_trades) > 10000:
+        if len(self.processed_trades) > self.max_processed_trades:
             self.processed_trades.clear()
-            logger.info("Cleared processed trades cache")
+            logger.info(f"Cleared processed trades cache (size exceeded {self.max_processed_trades})")
