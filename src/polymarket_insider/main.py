@@ -87,17 +87,19 @@ class PolymarketInsiderApp:
 
         # Send startup message
         await telegram_bot.send_message(
-            "🚀 *Polymarket Insider Started*\n\n"
-            "Monitoring for suspicious trading activity...\n"
-            f"Alert threshold: ${settings.min_trade_size_usd:,.2f}",
+            "🚀 *Polymarket Insider Enhanced Started*\n\n"
+            "🔍 Monitoring for suspicious trading activity with Goldsky subgraph integration...\n"
+            f"💰 Alert threshold: ${settings.min_trade_size_usd:,.2f}\n"
+            "📊 Real-time insider detection enabled\n"
+            "🤖 Advanced pattern analysis active",
         )
 
         # Start health checker
         await self.health_checker.start()
 
-        # Start trade monitoring (this will block)
-        trade_monitor = container.get_trade_monitor()
-        await trade_monitor.start()
+        # Start enhanced trade monitoring (this will block)
+        enhanced_trade_monitor = container.get_enhanced_trade_monitor()
+        await enhanced_trade_monitor.start()
 
 
 async def main() -> None:

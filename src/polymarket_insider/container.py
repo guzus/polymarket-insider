@@ -9,6 +9,8 @@ from .connection_manager import ConnectionManager
 from .bot.telegram_bot import TelegramAlertBot
 from .detector.suspicious_trade_detector import SuspiciousTradeDetector
 from .trade_monitor import TradeMonitor
+from .api.goldsky_client import GoldskyClient
+from .enhanced_trade_monitor import EnhancedTradeMonitor
 from .utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -43,16 +45,29 @@ class Container:
         await connection_manager.initialize()
         self._instances['connection_manager'] = connection_manager
 
+        # Initialize Goldsky client
+        goldsky_client = GoldskyClient()
+        await goldsky_client.initialize()
+        self._instances['goldsky_client'] = goldsky_client
+
         # Initialize bot
         telegram_bot = TelegramAlertBot()
         await telegram_bot.initialize()
         self._instances['telegram_bot'] = telegram_bot
 
-        # Initialize detector
+        # Initialize detectors
         detector = SuspiciousTradeDetector()
         self._instances['detector'] = detector
 
-        # Initialize trade monitor
+        # Initialize enhanced trade monitor (uses both traditional and subgraph data)
+        enhanced_trade_monitor = EnhancedTradeMonitor(
+            connection_manager=connection_manager,
+            telegram_bot=telegram_bot,
+            goldsky_client=goldsky_client
+        )
+        self._instances['enhanced_trade_monitor'] = enhanced_trade_monitor
+
+        # Keep traditional monitor for backwards compatibility
         trade_monitor = TradeMonitor(
             connection_manager=connection_manager,
             telegram_bot=telegram_bot,
@@ -70,7 +85,12 @@ class Container:
 
         logger.info("Cleaning up dependency container")
 
-        # Stop trade monitor
+        # Stop enhanced trade monitor
+        enhanced_trade_monitor = self._instances.get('enhanced_trade_monitor')
+        if enhanced_trade_monitor:
+            await enhanced_trade_monitor.stop()
+
+        # Stop traditional trade monitor
         trade_monitor = self._instances.get('trade_monitor')
         if trade_monitor:
             await trade_monitor.stop()
@@ -79,6 +99,11 @@ class Container:
         telegram_bot = self._instances.get('telegram_bot')
         if telegram_bot:
             await telegram_bot.stop()
+
+        # Cleanup Goldsky client
+        goldsky_client = self._instances.get('goldsky_client')
+        if goldsky_client:
+            await goldsky_client.cleanup()
 
         # Cleanup connection manager
         connection_manager = self._instances.get('connection_manager')
@@ -104,6 +129,14 @@ class Container:
     def get_trade_monitor(self) -> TradeMonitor:
         """Get the trade monitor instance."""
         return self._get_instance('trade_monitor', TradeMonitor)
+
+    def get_enhanced_trade_monitor(self) -> EnhancedTradeMonitor:
+        """Get the enhanced trade monitor instance."""
+        return self._get_instance('enhanced_trade_monitor', EnhancedTradeMonitor)
+
+    def get_goldsky_client(self) -> GoldskyClient:
+        """Get the Goldsky client instance."""
+        return self._get_instance('goldsky_client', GoldskyClient)
 
     def _get_instance(self, name: str, instance_type: type) -> Any:
         """Get an instance from the container."""

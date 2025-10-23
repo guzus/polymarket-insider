@@ -18,6 +18,24 @@ class Settings(BaseSettings):
         default="wss://ws_clob.polymarket.com",
         description="Polymarket WebSocket URL"
     )
+
+    # Goldsky Subgraph Configuration
+    goldsky_api_url: str = Field(
+        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market",
+        description="Goldsky API base URL for Polymarket subgraph"
+    )
+    goldsky_orders_url: str = Field(
+        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-orders",
+        description="Goldsky Orders subgraph URL"
+    )
+    goldsky_positions_url: str = Field(
+        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-positions",
+        description="Goldsky Positions subgraph URL"
+    )
+    goldsky_activity_url: str = Field(
+        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-activity",
+        description="Goldsky Activity subgraph URL"
+    )
     http_timeout: int = Field(
         default=30,
         description="HTTP request timeout in seconds"
