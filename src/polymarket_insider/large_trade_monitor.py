@@ -2,10 +2,11 @@
 
 import asyncio
 from datetime import datetime
-from typing import Set, Dict, Any
+from typing import Set, Dict, Any, Optional
 
 from .api.goldsky_client import GoldskyClient
 from .api.gamma_client import GammaClient
+from .api.data_api_client import DataAPIClient
 from .bot.telegram_bot import TelegramAlertBot
 from .config.settings import settings
 from .utils.logger import setup_logger
@@ -16,10 +17,11 @@ logger = setup_logger(__name__)
 class LargeTradeMonitor:
     """Monitor for tracking large trades (>$100k) on Polymarket."""
 
-    def __init__(self, goldsky_client: GoldskyClient, gamma_client: GammaClient, telegram_bot: TelegramAlertBot):
+    def __init__(self, goldsky_client: GoldskyClient, gamma_client: GammaClient, data_api_client: DataAPIClient, telegram_bot: TelegramAlertBot):
         """Initialize the large trade monitor."""
         self.goldsky_client = goldsky_client
         self.gamma_client = gamma_client
+        self.data_api_client = data_api_client
         self.telegram_bot = telegram_bot
         self.running = False
 
@@ -88,6 +90,12 @@ class LargeTradeMonitor:
             # Enrich trade data with market information
             enriched_trade = await self.gamma_client.enrich_trade_data(trade)
 
+            # Get taker information
+            taker_address = trade.get('taker', '')
+            taker_info = None
+            if taker_address:
+                taker_info = await self.data_api_client.get_trader_summary(taker_address)
+
             # Calculate trade size in USD
             trade_size_usd = self.goldsky_client.format_trade_usd(enriched_trade)
 
@@ -95,15 +103,17 @@ class LargeTradeMonitor:
             trade_type = enriched_trade.get('trade_type', 'UNKNOWN')
             outcome = enriched_trade.get('taker_outcome', 'Unknown')
 
-            logger.info(f"New large trade detected: ${trade_size_usd:,.2f} - {trade_type} {outcome} - {market_name} - TX: {tx_hash}")
+            # Create enhanced log message
+            taker_display = taker_info if taker_info else f"Unknown ({taker_address[:10]}...{taker_address[-8:]})"
+            logger.info(f"New large trade detected: ${trade_size_usd:,.2f} - {trade_type} {outcome} - {market_name} - Taker: {taker_display} - TX: {tx_hash}")
 
             # Send Telegram alert
-            await self._send_alert(enriched_trade, trade_size_usd)
+            await self._send_alert(enriched_trade, trade_size_usd, taker_info)
 
         except Exception as e:
             logger.error(f"Error processing trade: {e}")
 
-    async def _send_alert(self, trade: Dict[str, Any], trade_size_usd: float) -> None:
+    async def _send_alert(self, trade: Dict[str, Any], trade_size_usd: float, taker_info: Optional[str] = None) -> None:
         """Send Telegram alert for a large trade."""
         try:
             # Extract trade details
@@ -136,6 +146,12 @@ class LargeTradeMonitor:
             # Truncate market name if too long
             market_display = market_name[:60] + "..." if len(market_name) > 60 else market_name
 
+            # Format taker information
+            if taker_info and taker_info != f"Unknown Trader (`{taker[:10]}...{taker[-8:]}`)":
+                taker_display = f"• {taker_info}\n• `{taker[:10]}...{taker[-8:]}`"
+            else:
+                taker_display = f"• `{taker[:10]}...{taker[-8:]}`"
+
             message = f"""{trade_emoji} **LARGE TRADE ALERT** {trade_emoji}
 
 📊 **Trade Details:**
@@ -149,7 +165,7 @@ class LargeTradeMonitor:
 • {market_display}
 
 👤 **Taker:**
-• `{taker[:10]}...{taker[-8:]}`
+{taker_display}
 
 🔗 **Transaction:** [View on Polygonscan](https://polygonscan.com/tx/{tx_hash})
 """
