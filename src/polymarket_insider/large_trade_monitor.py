@@ -57,14 +57,14 @@ class LargeTradeMonitor:
     async def _check_for_large_trades(self) -> None:
         """Check for large recent trades using the orderbook subgraph."""
         try:
-            # Fetch large trades from the last 3 hours
+            # Fetch large trades from the last 1 hour
             trades = await self.goldsky_client.get_large_recent_trades(
                 min_value_usd=settings.min_trade_size_usd,
                 limit=100,
-                hours=3
+                hours=1
             )
 
-            logger.debug(f"Found {len(trades)} large trades in the last 3 hours")
+            logger.debug(f"Found {len(trades)} large trades in the last 1 hour")
 
             # Process each trade
             for trade in trades:
