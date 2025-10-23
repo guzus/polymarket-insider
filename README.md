@@ -2,24 +2,58 @@
 
 <img src="https://github.com/user-attachments/assets/4c21c7c4-440d-4f1f-a5fe-91128158aebf" width="50%">
 
-🔍 **Track suspicious large trades on Polymarket and get alerts via Telegram bot**
+🔍 **Track large trades on Polymarket with detailed market and trader insights via Telegram bot**
 
-Polymarket Insider monitors Polymarket for potentially manipulative trading activity, specifically looking for:
+Polymarket Insider monitors Polymarket for large trading activity, providing comprehensive alerts that include:
 
-- Large trades from newly created wallets
-- Wallets that are funded immediately before making large trades
-- Wallets with no prior trading history making significant trades
+- **Market names and outcomes** - Human-readable market questions instead of token IDs
+- **Trade direction** - Clear BUY/SELL indicators with visual indicators
+- **Detailed trader profiles** - Names, pseudonyms, activity levels, and trading history
+- **Direct profile links** - Click through to view complete Polymarket trader profiles
+- **Smart filtering** - Configurable thresholds to focus on significant trades
 
-## Features
+## ✨ Key Features
 
-- 🚀 Real-time trade monitoring via WebSocket connection
-- 🤖 Telegram bot integration for instant alerts
-- 🔍 Advanced suspicious pattern detection algorithms
-- 📊 Configurable alert thresholds
-- 🛡️ Graceful error handling and fallback mechanisms
-- 📝 Comprehensive logging
+- 🎯 **Market Intelligence**: Full market names and questions from Polymarket Gamma API
+- 📊 **Trade Direction**: Automatic BUY/SELL detection with color-coded indicators
+- 👤 **Trader Profiles**: Detailed trader information including activity levels and volume
+- 🔗 **Profile Links**: Direct links to Polymarket trader profiles for due diligence
+- 🤖 **Telegram Integration**: Instant, richly-formatted alerts with actionable information
+- 🚀 **High Performance**: Multi-API integration with intelligent caching
+- 🛡️ **Robust Architecture**: Graceful error handling and comprehensive logging
+- ⚙️ **Configurable**: Adjustable thresholds and monitoring parameters
 
-## Installation
+## 🏗️ Architecture
+
+The application uses a sophisticated multi-API architecture:
+
+```
+src/polymarket_insider/
+├── api/                    # API integration layer
+│   ├── goldsky_client.py   # Goldsky Orderbook GraphQL client
+│   ├── gamma_client.py     # Polymarket Gamma API client
+│   └── data_api_client.py  # Polymarket Data API client
+├── bot/                   # Telegram bot integration
+│   └── telegram_bot.py    # Telegram bot implementation
+├── config/                # Configuration management
+│   ├── settings.py        # Application settings
+│   └── validator.py       # Configuration validation
+├── utils/                 # Utilities
+│   ├── logger.py          # Logging configuration
+│   └── retry.py           # Retry mechanisms
+├── container.py           # Dependency injection
+├── large_trade_monitor.py # Main monitoring logic
+├── main.py               # Application entry point
+└── __init__.py
+```
+
+## 🚀 Installation
+
+### Prerequisites
+
+- Python 3.11 or higher
+- UV (recommended) or pip
+- Telegram Bot Token and Chat ID
 
 ### Using UV (Recommended)
 
@@ -50,7 +84,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 1. Copy the example environment file:
 
@@ -66,9 +100,14 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
 
 # Trade Detection Configuration
-MIN_TRADE_SIZE_USD=10000          # Minimum trade size to trigger alert
-FUNDING_LOOKBACK_HOURS=24         # Hours to look back for wallet funding
-TRADE_HISTORY_CHECK_DAYS=30       # Days to check for trade history
+MIN_TRADE_SIZE_USD=100000         # Minimum trade size to trigger alert (default: $100k)
+
+# API Configuration
+HTTP_TIMEOUT=30                   # API request timeout in seconds
+GOLDSKY_ORDERBOOK_URL=https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/orderbook-subgraph/0.0.1/gn
+
+# Monitoring Configuration
+POLLING_INTERVAL_SECONDS=60       # How often to check for new trades
 
 # Logging Configuration
 LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR
@@ -81,15 +120,15 @@ LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR
 3. Get your chat ID (you can use [@userinfobot](https://t.me/userinfobot) to find it)
 4. Add both to your `.env` file
 
-## Usage
+## 🎯 Usage
 
 ### Command Line
 
 ```bash
 # Run the application
-polymarket-insider
+uv run python -m polymarket_insider
 
-# Or using Python module
+# Or using Python module directly
 python -m polymarket_insider
 ```
 
@@ -103,15 +142,108 @@ uv sync --dev
 python -m polymarket_insider
 ```
 
-## Deployment
+## 📱 Alert Format
 
-### Docker Deployment (Recommended for Production)
+The bot sends richly-formatted alerts with comprehensive information:
 
-**Prerequisites:**
-- Docker and Docker Compose installed
-- `.env` file configured with your settings
+### 🟢 BUY Alert Example
 
-#### Quick Start
+```
+🟢 LARGE TRADE ALERT 🟢
+
+📊 Trade Details:
+• Size: $482,414.91
+• Action: BUY Yes
+• Amount: $100,000.00
+• Fee: $0.50
+• Time: 2025-10-24 02:40:34 UTC
+
+🎯 Market:
+• Will How to Train Your Dragon be the top grossing movie of 2025?
+
+👤 Taker:
+• tmry-st "Sandy-Doctrine" (Activity: high • Markets: 11 • Recent Volume: $672,241)
+• [View Profile](https://polymarket.com/profile/0x63274ff0...)
+• `0x6327...5e92`
+
+🔗 Transaction: [View on Polygonscan](https://polygonscan.com/tx/...)
+```
+
+### 🔴 SELL Alert Example
+
+```
+🔴 LARGE TRADE ALERT 🔴
+
+📊 Trade Details:
+• Size: $135,000.00
+• Action: SELL No
+• Amount: $135,000.00
+• Fee: $0.67
+• Time: 2025-10-24 02:40:36 UTC
+
+🎯 Market:
+• Will Ethereum be above $4,000 by end of 2025?
+
+👤 Taker:
+• crypto_whale "Bearish-Believer" (Activity: medium • Markets: 23 • Recent Volume: $2,845,120)
+• [View Profile](https://polymarket.com/profile/0xabc123...)
+• `0xabc1...def0`
+
+🔗 Transaction: [View on Polygonscan](https://polygonscan.com/tx/...)
+```
+
+## 🔍 Alert Information
+
+Each alert includes:
+
+### 📊 Trade Details
+- **Size**: Total USD value of the trade
+- **Action**: Trade direction (BUY/SELL) and outcome (Yes/No)
+- **Amount**: Specific amount traded in USD
+- **Fee**: Transaction fee paid
+- **Time**: Timestamp of the trade
+
+### 🎯 Market Information
+- **Market Name**: Human-readable market question
+- **Context**: Full market context for understanding the trade
+
+### 👤 Trader Profile
+- **Name & Pseudonym**: Trader's display name and pseudonym
+- **Activity Level**: Trading frequency (very high/high/medium/low)
+- **Market Diversity**: Number of unique markets traded
+- **Recent Volume**: Recent trading volume in USD
+- **Profile Link**: Direct link to Polymarket profile
+- **Wallet Address**: Truncated wallet address for reference
+
+## 📊 API Integration
+
+### Goldsky Orderbook Subgraph
+- Fetches real-time trade data from Polymarket orderbook
+- Provides transaction details, amounts, and participant addresses
+- Updated every 60 seconds for comprehensive coverage
+
+### Polymarket Gamma API
+- Supplies market names, questions, and token mappings
+- Maps token IDs to human-readable market information
+- Caches data for 15 minutes to optimize performance
+
+### Polymarket Data API
+- Provides detailed trader profiles and activity data
+- Analyzes trading patterns, frequency, and volume
+- Caches trader information for 30 minutes
+
+## ⚙️ Configuration Options
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `MIN_TRADE_SIZE_USD` | Minimum trade size in USD to trigger alert | 100000 |
+| `HTTP_TIMEOUT` | API request timeout in seconds | 30 |
+| `POLLING_INTERVAL_SECONDS` | Trade monitoring check interval | 60 |
+| `LOG_LEVEL` | Logging verbosity level | INFO |
+
+## 🐳 Docker Deployment
+
+### Quick Start
 
 ```bash
 # Clone and setup
@@ -120,180 +252,25 @@ cd polymarket-insider
 cp .env.example .env
 # Edit .env with your configuration
 
-# Deploy using the deployment script
-./scripts/deploy.sh docker
-
-# Or manually
-docker-compose up -d
+# Build and run
+docker build -t polymarket-insider .
+docker run -d --env-file .env --name polymarket-insider polymarket-insider
 ```
 
-#### Deployment Scripts
-
-The repository includes a comprehensive deployment script:
+### Docker Compose
 
 ```bash
-# Deploy with Docker (production)
-./scripts/deploy.sh docker
-
-# Deploy locally for development
-./scripts/deploy.sh local
-
-# Update running container
-./scripts/deploy.sh update
-
-# Stop the application
-./scripts/deploy.sh stop
+# Using docker-compose
+docker-compose up -d
 
 # View logs
-./scripts/deploy.sh logs
+docker-compose logs -f
 
-# Check container status
-./scripts/deploy.sh status
+# Stop the service
+docker-compose down
 ```
 
-#### Health Monitoring
-
-```bash
-# Run health check
-./scripts/health-check.sh
-
-# Set up automated health checks (every 5 minutes)
-crontab cron/health-check.cron
-```
-
-### Kubernetes Deployment
-
-For production Kubernetes environments:
-
-```bash
-# Update secrets with your actual values
-echo -n "your_telegram_bot_token" | base64
-echo -n "your_chat_id" | base64
-
-# Edit k8s/secrets.yaml with the encoded values
-
-# Deploy to Kubernetes
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml
-kubectl apply -f k8s/pvc.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-```
-
-### Monitoring Stack
-
-Optional monitoring with Prometheus and Grafana:
-
-```bash
-# Start monitoring stack
-cd monitoring
-docker-compose -f docker-compose.monitoring.yml up -d
-
-# Access Grafana at http://localhost:3001 (admin/admin123)
-# Access Prometheus at http://localhost:9090
-```
-
-#### Environment Variables for Production
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | Required |
-| `TELEGRAM_CHAT_ID` | Your Telegram chat ID | Required |
-| `POLYMARKET_API_URL` | Polymarket API endpoint | `https://clob.polymarket.com` |
-| `POLYMARKET_WS_URL` | Polymarket WebSocket URL | `wss://ws_clob.polymarket.com` |
-| `MIN_TRADE_SIZE_USD` | Minimum trade size for alerts | `10000` |
-| `FUNDING_LOOKBACK_HOURS` | Hours to look back for funding | `24` |
-| `TRADE_HISTORY_CHECK_DAYS` | Days to check trade history | `30` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-
-### Production Deployment Checklist
-
-- [ ] Configure `.env` with production values
-- [ ] Set up Telegram bot and get token/chat ID
-- [ ] Configure monitoring and alerting
-- [ ] Set up log rotation
-- [ ] Configure backup strategy
-- [ ] Set up automated health checks
-- [ ] Review resource limits and scaling
-- [ ] Test deployment in staging environment first
-
-### Cloud Deployment
-
-#### AWS ECS
-
-1. Build and push to ECR:
-```bash
-aws ecr create-repository --repository-name polymarket-insider
-docker build -t polymarket-insider .
-docker tag polymarket-insider:latest <aws-account-id>.dkr.ecr.<region>.amazonaws.com/polymarket-insider:latest
-docker push <aws-account-id>.dkr.ecr.<region>.amazonaws.com/polymarket-insider:latest
-```
-
-2. Deploy using ECS Task Definition with environment variables
-
-#### Google Cloud Run
-
-```bash
-gcloud builds submit --tag gcr.io/PROJECT_ID/polymarket-insider
-gcloud run deploy --image gcr.io/PROJECT_ID/polymarket-insider --platform managed
-```
-
-#### DigitalOcean App Platform
-
-1. Connect repository to App Platform
-2. Configure environment variables in App Platform settings
-3. Deploy with automatic build and deployment
-python -m polymarket_insider
-```
-
-## Alert Types
-
-The bot detects and alerts on several suspicious patterns:
-
-### 1. Large New Wallet Trades
-- New wallets (no previous trades) making large transactions
-- High confidence alerts for wallets funded immediately before trading
-
-### 2. Recent Funding Patterns
-- Wallets that received funding within the lookback period
-- Trades that closely match recent funding amounts
-- Temporal proximity analysis between funding and trading
-
-### 3. Low Activity Wallets
-- Wallets with minimal trading history suddenly making large trades
-- Pattern analysis to identify potentially suspicious behavior
-
-## Alert Format
-
-🔴 **SUSPICIOUS TRADE DETECTED** 🔴
-
-📊 **Trade Details:**
-- Market: [Market Question]
-- Size: $XX,XXX.XX
-- Price: $X.XXXX
-- Side: BUY/SELL
-- Time: YYYY-MM-DD HH:MM:SS UTC
-
-🔍 **Suspicious Activity:**
-- Detailed explanation of suspicious patterns
-
-👛 **Wallet Analysis:**
-- Address: `0x...`
-- Previous Trades: X
-- Confidence: XX%
-
-🔗 **Transaction:** [View on Etherscan](link)
-
-## Configuration Options
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `MIN_TRADE_SIZE_USD` | Minimum trade size in USD to trigger alert | 10000 |
-| `FUNDING_LOOKBACK_HOURS` | Hours to look back for wallet funding | 24 |
-| `TRADE_HISTORY_CHECK_DAYS` | Days to check for trade history | 30 |
-| `LOG_LEVEL` | Logging verbosity level | INFO |
-
-## Development
+## 🔧 Development
 
 ### Code Quality
 
@@ -318,27 +295,30 @@ uv run pytest
 uv run pytest --cov=src/polymarket_insider
 ```
 
-## Architecture
+## 🚀 Production Deployment
 
-```
-src/polymarket_insider/
-├── api/                    # Polymarket API integration
-│   ├── client.py          # Main API client
-│   └── models.py          # Data models
-├── bot/                   # Telegram bot integration
-│   └── telegram_bot.py    # Telegram bot implementation
-├── detector/              # Suspicious pattern detection
-│   └── suspicious_trade_detector.py
-├── config/                # Configuration management
-│   └── settings.py        # Application settings
-├── utils/                 # Utilities
-│   └── logger.py          # Logging configuration
-├── trade_tracker.py       # Main tracking logic
-├── main.py               # Application entry point
-└── __init__.py
+### Environment Setup
+
+For production deployment, ensure:
+
+1. **Environment Variables**: All required variables are properly configured
+2. **Resource Limits**: Appropriate memory and CPU limits set
+3. **Monitoring**: Logging and health checks configured
+4. **Security**: Proper bot token management and access control
+
+### Monitoring
+
+The application provides comprehensive logging:
+
+```bash
+# View application logs
+docker logs polymarket-insider
+
+# Follow logs in real-time
+docker logs -f polymarket-insider
 ```
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -346,14 +326,25 @@ src/polymarket_insider/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
+## 📝 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 This tool is for educational and research purposes only. It does not provide financial advice. Always do your own research before making any trading decisions.
 
-## Support
+The information provided is based on publicly available data from Polymarket and should not be used as the sole basis for any investment decisions.
 
-If you encounter any issues or have questions, please open an issue on the GitHub repository.
+## 🆘 Support
+
+If you encounter any issues or have questions, please open an issue on the GitHub repository with:
+
+- Detailed description of the problem
+- Error messages or logs (if applicable)
+- Steps to reproduce the issue
+- Your environment details (OS, Python version, etc.)
+
+---
+
+**Built with ❤️ for the Polymarket community**
