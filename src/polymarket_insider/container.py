@@ -10,6 +10,7 @@ from .bot.telegram_bot import TelegramAlertBot
 from .detector.suspicious_trade_detector import SuspiciousTradeDetector
 from .api.goldsky_client import GoldskyClient
 from .enhanced_trade_monitor import EnhancedTradeMonitor
+from .new_user_monitor import NewUserMonitor
 from .utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -66,6 +67,14 @@ class Container:
         )
         self._instances['enhanced_trade_monitor'] = enhanced_trade_monitor
 
+        # Initialize new user monitor
+        new_user_monitor = NewUserMonitor(
+            goldsky_client=goldsky_client,
+            telegram_bot=telegram_bot
+        )
+        await new_user_monitor.initialize()
+        self._instances['new_user_monitor'] = new_user_monitor
+
         self._initialized = True
         logger.info("Dependency container initialized")
 
@@ -75,6 +84,12 @@ class Container:
             return
 
         logger.info("Cleaning up dependency container")
+
+        # Stop new user monitor
+        new_user_monitor = self._instances.get('new_user_monitor')
+        if new_user_monitor:
+            await new_user_monitor.stop()
+            await new_user_monitor.cleanup()
 
         # Stop enhanced trade monitor
         enhanced_trade_monitor = self._instances.get('enhanced_trade_monitor')
@@ -119,6 +134,10 @@ class Container:
     def get_goldsky_client(self) -> GoldskyClient:
         """Get the Goldsky client instance."""
         return self._get_instance('goldsky_client', GoldskyClient)
+
+    def get_new_user_monitor(self) -> NewUserMonitor:
+        """Get the new user monitor instance."""
+        return self._get_instance('new_user_monitor', NewUserMonitor)
 
     def _get_instance(self, name: str, instance_type: type) -> Any:
         """Get an instance from the container."""

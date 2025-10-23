@@ -87,19 +87,25 @@ class PolymarketInsiderApp:
 
         # Send startup message
         await telegram_bot.send_message(
-            "🚀 *Polymarket Insider Enhanced Started*\n\n"
-            "🔍 Monitoring for suspicious trading activity with Goldsky subgraph integration...\n"
+            "🚀 *Polymarket Insider Bot Started*\n\n"
+            "🔍 Monitoring for new users making large trades...\n"
             f"💰 Alert threshold: ${settings.min_trade_size_usd:,.2f}\n"
-            "📊 Real-time insider detection enabled\n"
-            "🤖 Advanced pattern analysis active",
+            f"👤 New user threshold: < {settings.min_user_trades_threshold} trades\n"
+            "📊 Using Goldsky subgraph for trade data\n"
+            "🤖 Automated alerts enabled",
         )
 
         # Start health checker
         await self.health_checker.start()
 
-        # Start enhanced trade monitoring (this will block)
-        enhanced_trade_monitor = container.get_enhanced_trade_monitor()
-        await enhanced_trade_monitor.start()
+        # Start new user monitoring (this will run in parallel)
+        new_user_monitor = container.get_new_user_monitor()
+
+        # Start both monitors concurrently
+        await asyncio.gather(
+            new_user_monitor.start(),
+            # You can add more monitors here if needed
+        )
 
 
 async def main() -> None:

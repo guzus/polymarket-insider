@@ -12,7 +12,11 @@
       "WebFetch(domain:github.com)",
       "Bash(python3:*)",
       "Bash(git pull:*)",
-      "Bash(timeout 10 uv run:*)"
+      "Bash(timeout 10 uv run:*)",
+      "Bash(timeout 15 uv run:*)",
+      "WebFetch(domain:docs.polymarket.com)",
+      "WebSearch",
+      "WebFetch(domain:gist.github.com)"
     ],
     "deny": [],
     "ask": []
