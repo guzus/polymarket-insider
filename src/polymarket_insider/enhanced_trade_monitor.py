@@ -52,6 +52,13 @@ class EnhancedTradeMonitor:
         # Start subgraph-based monitoring
         self._subgraph_monitor_task = asyncio.create_task(self._monitor_subgraph())
 
+        # Wait for both tasks to complete (they run forever until stopped)
+        try:
+            await asyncio.gather(self._monitor_task, self._subgraph_monitor_task)
+        except asyncio.CancelledError:
+            logger.info("Enhanced trade monitor tasks cancelled")
+            raise
+
     async def stop(self) -> None:
         """Stop the enhanced trade monitor."""
         logger.info("Stopping enhanced trade monitor")
