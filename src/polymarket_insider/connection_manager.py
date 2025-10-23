@@ -9,11 +9,11 @@ import httpx
 import websockets
 from websockets.client import WebSocketClientProtocol
 
-from .api.client import PolymarketClient
-from .api.models import Trade, Market, WalletFunding, WalletTradeHistory
+from .api.models import Trade, Market, WalletFunding, WalletTradeHistory, Token
 from .config.settings import settings
 from .exceptions import ConnectionError, WebSocketError, APIError
 from .utils.logger import setup_logger
+from .utils.retry import retry_async, rate_limit_async, api_circuit_breaker
 
 logger = setup_logger(__name__)
 
@@ -23,7 +23,8 @@ class ConnectionManager:
 
     def __init__(self):
         """Initialize the connection manager."""
-        self.polymarket_client = PolymarketClient()
+        self.api_base_url = settings.polymarket_api_url
+        self.ws_url = settings.polymarket_ws_url
         self.websocket: Optional[WebSocketClientProtocol] = None
         self._markets_cache: Dict[str, Market] = {}
         self._markets_cache_updated: Optional[datetime] = None
@@ -45,6 +46,9 @@ class ConnectionManager:
             await self._http_client.aclose()
             self._http_client = None
 
+    @api_circuit_breaker
+    @retry_async(max_attempts=3, initial_delay=1.0)
+    @rate_limit_async(calls_per_second=10.0)
     async def get_markets(self) -> Dict[str, Market]:
         """Get markets with caching."""
         now = datetime.now()
@@ -63,22 +67,24 @@ class ConnectionManager:
                 markets = {}
 
                 for market_data in markets_data:
+                    tokens = [
+                        Token(
+                            token_id=token["token_id"],
+                            price=float(token["price"]),
+                            outcome=token["outcome"]
+                        ) for token in market_data.get("tokens", [])
+                    ]
+
                     market = Market(
                         question=market_data.get("question", ""),
                         description=market_data.get("description", ""),
                         end_date=datetime.fromisoformat(market_data["end_date"])
                                 if market_data.get("end_date") else None,
-                        tokens=[
-                            {
-                                "token_id": token["token_id"],
-                                "price": float(token["price"]),
-                                "outcome": token["outcome"]
-                            } for token in market_data.get("tokens", [])
-                        ]
+                        tokens=tokens
                     )
 
-                    for token in market["tokens"]:
-                        self._markets_cache[token["token_id"]] = market
+                    for token in market.tokens:
+                        self._markets_cache[token.token_id] = market
 
                 self._markets_cache_updated = now
                 logger.info(f"Fetched {len(self._markets_cache)} markets")
@@ -88,6 +94,9 @@ class ConnectionManager:
             logger.error(f"Failed to fetch markets: {e}")
             raise APIError(f"Failed to fetch markets: {e}")
 
+    @api_circuit_breaker
+    @retry_async(max_attempts=3, initial_delay=1.0)
+    @rate_limit_async(calls_per_second=5.0)
     async def get_recent_trades(self, limit: int = 100) -> List[Trade]:
         """Get recent trades from Polymarket."""
         try:
@@ -114,7 +123,7 @@ class ConnectionManager:
                     token_id=trade_data["token_id"],
                     timestamp=datetime.fromisoformat(trade_data["timestamp"]),
                     transaction_hash=trade_data["transaction_hash"],
-                    market_question=markets.get(trade_data["token_id"], {}).get("question")
+                    market_question=markets.get(trade_data["token_id"], Market(question="")).question
                                    if trade_data["token_id"] in markets else None,
                     usd_size=float(trade_data["size"]) * float(trade_data["price"]) * 1000
                 )
@@ -133,6 +142,9 @@ class ConnectionManager:
         # TODO: Implement actual blockchain API integration
         return []
 
+    @api_circuit_breaker
+    @retry_async(max_attempts=2, initial_delay=2.0)
+    @rate_limit_async(calls_per_second=2.0)
     async def get_wallet_trade_history(self, address: str, days: int = 30) -> WalletTradeHistory:
         """Get wallet trade history summary for the specified days."""
         try:

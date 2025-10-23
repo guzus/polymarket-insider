@@ -51,3 +51,18 @@ class WalletTradeHistory(BaseModel):
     first_trade_date: Optional[datetime] = None
     last_trade_date: Optional[datetime] = None
     total_volume_usd: float = 0.0
+
+
+class SuspiciousTradeAlert(BaseModel):
+    """Alert for suspicious trading activity."""
+    transaction_hash: str
+    market_question: Optional[str] = None
+    trade_size: float
+    trade_price: float
+    trade_side: str
+    wallet_address: str
+    confidence_score: int  # 0-100
+    reason: str
+    timestamp: datetime
+    funding_history: List[WalletFunding] = []
+    trade_history: Optional[WalletTradeHistory] = None
