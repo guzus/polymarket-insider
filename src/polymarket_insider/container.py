@@ -8,7 +8,6 @@ from .config.validator import validate_configuration
 from .connection_manager import ConnectionManager
 from .bot.telegram_bot import TelegramAlertBot
 from .detector.suspicious_trade_detector import SuspiciousTradeDetector
-from .trade_monitor import TradeMonitor
 from .api.goldsky_client import GoldskyClient
 from .enhanced_trade_monitor import EnhancedTradeMonitor
 from .utils.logger import setup_logger
@@ -67,14 +66,6 @@ class Container:
         )
         self._instances['enhanced_trade_monitor'] = enhanced_trade_monitor
 
-        # Keep traditional monitor for backwards compatibility
-        trade_monitor = TradeMonitor(
-            connection_manager=connection_manager,
-            telegram_bot=telegram_bot,
-            detector=detector
-        )
-        self._instances['trade_monitor'] = trade_monitor
-
         self._initialized = True
         logger.info("Dependency container initialized")
 
@@ -89,11 +80,6 @@ class Container:
         enhanced_trade_monitor = self._instances.get('enhanced_trade_monitor')
         if enhanced_trade_monitor:
             await enhanced_trade_monitor.stop()
-
-        # Stop traditional trade monitor
-        trade_monitor = self._instances.get('trade_monitor')
-        if trade_monitor:
-            await trade_monitor.stop()
 
         # Stop telegram bot
         telegram_bot = self._instances.get('telegram_bot')
@@ -125,10 +111,6 @@ class Container:
     def get_detector(self) -> SuspiciousTradeDetector:
         """Get the detector instance."""
         return self._get_instance('detector', SuspiciousTradeDetector)
-
-    def get_trade_monitor(self) -> TradeMonitor:
-        """Get the trade monitor instance."""
-        return self._get_instance('trade_monitor', TradeMonitor)
 
     def get_enhanced_trade_monitor(self) -> EnhancedTradeMonitor:
         """Get the enhanced trade monitor instance."""

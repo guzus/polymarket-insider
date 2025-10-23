@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run python:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: resolve API response parsing and async cleanup issues\n\n- Fix Polymarket API response parsing to handle {\"data\": [...]} format\n- Fix Telegram bot polling to work with existing event loop\n- Fix GraphQL client cleanup to properly close transports\n- Update GoldskyClient to create transports without shared HTTP client\n- Add proper error handling in bot shutdown and client cleanup\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: improve Telegram bot task lifecycle management\n\n- Add proper task tracking for polling background task\n- Wrap polling in error handler to catch network errors gracefully\n- Stop updater before shutting down to properly cancel internal tasks\n- Eliminate \"Task exception was never retrieved\" warnings\n- Improve graceful shutdown of Telegram bot components\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(python3:*)",
+      "Bash(git pull:*)",
+      "Bash(timeout 10 uv run:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
