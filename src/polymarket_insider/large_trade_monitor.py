@@ -100,7 +100,20 @@ class LargeTradeMonitor:
             taker_address = trade.get('taker', '')
             taker_info = None
             taker_profile_url = ''
+            taker_markets_count = 0
+
             if taker_address:
+                # Get raw trader info for filtering
+                trader_data = await self.data_api_client.get_trader_info(taker_address)
+                if trader_data and 'unique_markets_count' in trader_data:
+                    taker_markets_count = trader_data['unique_markets_count']
+
+                    # Filter out traders with 10 or more markets
+                    if taker_markets_count >= 10:
+                        logger.debug(f"Skipping trade for experienced trader ({taker_markets_count} markets): {taker_address[:10]}...{taker_address[-8:]} - TX: {tx_hash}")
+                        return
+
+                # Get trader summary for display
                 result = await self.data_api_client.get_trader_summary(taker_address)
                 if isinstance(result, tuple) and len(result) == 2:
                     taker_info, taker_profile_url = result
@@ -168,45 +181,35 @@ class LargeTradeMonitor:
                 taker_amount_formatted = 0
                 fee_formatted = 0
 
+            # Calculate average price
+            try:
+                avg_price = trade_size_usd / taker_amount_formatted if taker_amount_formatted > 0 else 0
+                avg_price_str = f"{avg_price:.4f}"
+            except (ZeroDivisionError, ValueError):
+                avg_price_str = "N/A"
+
             # Create emoji for trade type
             trade_emoji = "🟢" if trade_type == "BUY" else "🔴" if trade_type == "SELL" else "⚪"
 
             # Truncate market name if too long
-            market_display = market_name[:60] + "..." if len(market_name) > 60 else market_name
+            market_display = market_name[:80] + "..." if len(market_name) > 80 else market_name
 
-            # Format taker information
+            # Format taker information (concise)
             if taker_info and taker_info != f"Unknown Trader (`{taker[:10]}...{taker[-8:]}`)":
-                taker_lines = [f"• {taker_info}"]
-
-                # Add profile link if available
+                taker_display = f"👤 {taker_info}"
                 if taker_profile_url:
-                    taker_lines.append(f"• [View Profile]({taker_profile_url})")
-
-                taker_lines.append(f"• `{taker[:10]}...{taker[-8:]}`")
-                taker_display = '\n'.join(taker_lines)
+                    taker_display += f" [🔗]({taker_profile_url})"
             else:
-                taker_display = f"• `{taker[:10]}...{taker[-8:]}`"
-
-                # Add profile link even for unknown traders
+                taker_display = f"👤 `{taker[:10]}...{taker[-8:]}`"
                 if taker_profile_url:
-                    taker_display += f"\n• [View Profile]({taker_profile_url})"
+                    taker_display += f" [🔗]({taker_profile_url})"
 
-            message = f"""{trade_emoji} **LARGE TRADE ALERT** {trade_emoji}
+            message = f"""{trade_emoji} **{trade_size_usd:,.0f} {trade_type} {outcome} @ ${avg_price_str}**
+{market_display}
+{time_str} UTC
 
-📊 **Trade Details:**
-• Size: ${trade_size_usd:,.2f}
-• Action: {trade_type} {outcome}
-• Amount: ${taker_amount_formatted:,.2f}
-• Fee: ${fee_formatted:,.2f}
-• Time: {time_str} UTC
-
-🎯 **Market:**
-• {market_display}
-
-👤 **Taker:**
 {taker_display}
-
-🔗 **Transaction:** [View on Polygonscan](https://polygonscan.com/tx/{tx_hash})
+🔗 [View on Polygonscan](https://polygonscan.com/tx/{tx_hash})
 """
 
             await self.telegram_bot.send_message(message)
