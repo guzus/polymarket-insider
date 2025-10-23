@@ -44,9 +44,7 @@ class ConfigurationValidator:
         # Validate logging settings
         self._validate_logging_settings()
 
-        # Validate WebSocket settings
-        self._validate_websocket_settings()
-
+  
         # Validate timing settings
         self._validate_timing_settings()
 
@@ -78,16 +76,11 @@ class ConfigurationValidator:
 
     def _validate_api_settings(self) -> None:
         """Validate API-related settings."""
-        # API URLs
-        if not settings.polymarket_api_url:
-            self.errors.append("POLYMARKET_API_URL is required")
-        elif not self._is_valid_url(settings.polymarket_api_url):
-            self.errors.append("POLYMARKET_API_URL format is invalid")
-
-        if not settings.polymarket_ws_url:
-            self.errors.append("POLYMARKET_WS_URL is required")
-        elif not settings.polymarket_ws_url.startswith(('ws://', 'wss://')):
-            self.errors.append("POLYMARKET_WS_URL must be a WebSocket URL (ws:// or wss://)")
+        # Goldsky Orderbook URL
+        if not settings.goldsky_orderbook_url:
+            self.errors.append("GOLDSKY_ORDERBOOK_URL is required")
+        elif not self._is_valid_url(settings.goldsky_orderbook_url):
+            self.errors.append("GOLDSKY_ORDERBOOK_URL format is invalid")
 
         # HTTP timeout
         if settings.http_timeout <= 0:
@@ -112,50 +105,15 @@ class ConfigurationValidator:
         elif settings.min_trade_size_usd > 100000:
             self.warnings.append("MIN_TRADE_SIZE_USD is very high, may miss suspicious trades")
 
-        # Funding lookback hours
-        if settings.funding_lookback_hours <= 0:
-            self.errors.append("FUNDING_LOOKBACK_HOURS must be positive")
-        elif settings.funding_lookback_hours > 168:  # 1 week
-            self.warnings.append("FUNDING_LOOKBACK_HOURS is very high, may affect performance")
-
-        # Trade history check days
-        if settings.trade_history_check_days <= 0:
-            self.errors.append("TRADE_HISTORY_CHECK_DAYS must be positive")
-        elif settings.trade_history_check_days > 365:
-            self.warnings.append("TRADE_HISTORY_CHECK_DAYS is very high, may affect performance")
-
-        # USD conversion multiplier
-        if settings.usd_conversion_multiplier <= 0:
-            self.errors.append("USD_CONVERSION_MULTIPLIER must be positive")
-
     def _validate_logging_settings(self) -> None:
         """Validate logging settings."""
         valid_log_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         if settings.log_level not in valid_log_levels:
             self.errors.append(f"LOG_LEVEL must be one of: {', '.join(valid_log_levels)}")
 
-    def _validate_websocket_settings(self) -> None:
-        """Validate WebSocket settings."""
-        # Ping interval
-        if settings.websocket_ping_interval <= 0:
-            self.errors.append("WEBSOCKET_PING_INTERVAL must be positive")
-        elif settings.websocket_ping_interval < 10:
-            self.warnings.append("WEBSOCKET_PING_INTERVAL is very low, may cause excessive network traffic")
-
-        # Ping timeout
-        if settings.websocket_ping_timeout <= 0:
-            self.errors.append("WEBSOCKET_PING_TIMEOUT must be positive")
-        elif settings.websocket_ping_timeout > settings.websocket_ping_interval:
-            self.errors.append("WEBSOCKET_PING_TIMEOUT should not exceed WEBSOCKET_PING_INTERVAL")
-
+  
     def _validate_timing_settings(self) -> None:
         """Validate timing-related settings."""
-        # Reconnect delay
-        if settings.reconnect_delay_seconds <= 0:
-            self.errors.append("RECONNECT_DELAY_SECONDS must be positive")
-        elif settings.reconnect_delay_seconds > 300:
-            self.warnings.append("RECONNECT_DELAY_SECONDS is very high, may cause long outages")
-
         # Polling interval
         if settings.polling_interval_seconds <= 0:
             self.errors.append("POLLING_INTERVAL_SECONDS must be positive")
@@ -163,12 +121,6 @@ class ConfigurationValidator:
             self.warnings.append("POLLING_INTERVAL_SECONDS is very low, may cause API rate limiting")
         elif settings.polling_interval_seconds > 300:
             self.warnings.append("POLLING_INTERVAL_SECONDS is very high, may cause delays in detection")
-
-        # Health check interval
-        if settings.health_check_interval_seconds <= 0:
-            self.errors.append("HEALTH_CHECK_INTERVAL_SECONDS must be positive")
-        elif settings.health_check_interval_seconds < 60:
-            self.warnings.append("HEALTH_CHECK_INTERVAL_SECONDS is very low, may cause excessive checks")
 
     def _is_valid_telegram_token(self, token: str) -> bool:
         """Validate Telegram bot token format."""

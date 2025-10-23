@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     # Trade Detection Configuration
-    min_trade_size_usd: float = 10000.0
+    min_trade_size_usd: float = 100000.0
 
     # Monitoring Configuration
     polling_interval_seconds: int = 60

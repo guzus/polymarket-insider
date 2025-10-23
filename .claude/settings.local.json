@@ -17,7 +17,9 @@
       "WebFetch(domain:docs.polymarket.com)",
       "WebSearch",
       "WebFetch(domain:gist.github.com)",
-      "Bash(timeout 15 uv pip install:*)"
+      "Bash(timeout 15 uv pip install:*)",
+      "Bash(timeout:*)",
+      "Bash(kill:*)"
     ],
     "deny": [],
     "ask": []
