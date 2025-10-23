@@ -3,10 +3,8 @@
 import asyncio
 import signal
 import sys
-from typing import Optional
 
 from .container import container
-from .health_checker import HealthChecker
 from .config.settings import settings
 from .utils.logger import setup_logger
 
@@ -18,7 +16,6 @@ class PolymarketInsiderApp:
 
     def __init__(self):
         """Initialize the application."""
-        self.health_checker: Optional[HealthChecker] = None
         self.running = False
 
     async def start(self) -> None:
@@ -28,14 +25,6 @@ class PolymarketInsiderApp:
         try:
             # Initialize dependency container
             await container.initialize()
-
-            # Initialize health checker
-            self.health_checker = HealthChecker(
-                connection_manager=container.get_connection_manager(),
-                telegram_bot=container.get_telegram_bot(),
-                detector=container.get_detector(),
-                check_interval_seconds=settings.health_check_interval_seconds
-            )
 
             # Set up signal handlers for graceful shutdown
             self._setup_signal_handlers()
@@ -60,10 +49,6 @@ class PolymarketInsiderApp:
         logger.info("Stopping Polymarket Insider application")
         self.running = False
 
-        # Stop health checker
-        if self.health_checker:
-            await self.health_checker.stop()
-
         # Clean up container (stops all components)
         await container.cleanup()
 
@@ -77,7 +62,7 @@ class PolymarketInsiderApp:
         signal.signal(signal.SIGTERM, signal_handler)
 
     async def _start_monitoring(self) -> None:
-        """Start monitoring trades and health checks."""
+        """Start monitoring large trades."""
         logger.info("Starting monitoring")
 
         telegram_bot = container.get_telegram_bot()
@@ -88,24 +73,15 @@ class PolymarketInsiderApp:
         # Send startup message
         await telegram_bot.send_message(
             "🚀 *Polymarket Insider Bot Started*\n\n"
-            "🔍 Monitoring for new users making large trades...\n"
+            "🔍 Monitoring for large trades...\n"
             f"💰 Alert threshold: ${settings.min_trade_size_usd:,.2f}\n"
-            f"👤 New user threshold: < {settings.min_user_trades_threshold} trades\n"
-            "📊 Using Goldsky subgraph for trade data\n"
+            "📊 Using Goldsky Orderbook Subgraph\n"
             "🤖 Automated alerts enabled",
         )
 
-        # Start health checker
-        await self.health_checker.start()
-
-        # Start new user monitoring (this will run in parallel)
-        new_user_monitor = container.get_new_user_monitor()
-
-        # Start both monitors concurrently
-        await asyncio.gather(
-            new_user_monitor.start(),
-            # You can add more monitors here if needed
-        )
+        # Start large trade monitor
+        large_trade_monitor = container.get_large_trade_monitor()
+        await large_trade_monitor.start()
 
 
 async def main() -> None:

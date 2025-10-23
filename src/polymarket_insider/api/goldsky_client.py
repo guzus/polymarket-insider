@@ -1,16 +1,12 @@
-"""Goldsky Subgraph GraphQL client for Polymarket data."""
+"""Goldsky Orderbook Subgraph GraphQL client for Polymarket large trade tracking."""
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
-from decimal import Decimal
+from typing import List, Dict, Any, Optional
 
-import httpx
 from gql import gql, Client
 from gql.transport.httpx import HTTPXAsyncTransport
-from gql.transport.websockets import WebsocketsTransport
 
-from ..api.models import Trade, Market, Token, WalletFunding, WalletTradeHistory
 from ..config.settings import settings
 from ..exceptions import APIError
 from ..utils.logger import setup_logger
@@ -20,418 +16,120 @@ logger = setup_logger(__name__)
 
 
 class GoldskyClient:
-    """GraphQL client for Goldsky Polymarket subgraphs."""
+    """GraphQL client for Goldsky Orderbook Subgraph."""
 
     def __init__(self):
         """Initialize the Goldsky client."""
-        self.base_url = settings.goldsky_api_url
-        self.orders_url = settings.goldsky_orders_url
-        self.positions_url = settings.goldsky_positions_url
-        self.activity_url = settings.goldsky_activity_url
-
-        self._clients: Dict[str, Client] = {}
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self.orderbook_url = settings.goldsky_orderbook_url
+        self._client: Optional[Client] = None
 
     async def initialize(self) -> None:
-        """Initialize GraphQL clients."""
+        """Initialize GraphQL client."""
         try:
-            # Initialize HTTP client
-            self._http_client = httpx.AsyncClient(timeout=settings.http_timeout)
-
-            # Initialize GraphQL clients for different subgraphs
-            transport_configs = {
-                'base': self.base_url,
-                'orders': self.orders_url,
-                'positions': self.positions_url,
-                'activity': self.activity_url
-            }
-
-            for name, url in transport_configs.items():
-                # Create transport without sharing the http client
-                transport = HTTPXAsyncTransport(url=url, timeout=settings.http_timeout)
-                # Disable schema fetching to avoid issues with subgraph introspection
-                self._clients[name] = Client(transport=transport, fetch_schema_from_transport=False)
-
-            logger.info("Goldsky GraphQL clients initialized successfully")
+            transport = HTTPXAsyncTransport(url=self.orderbook_url, timeout=settings.http_timeout)
+            self._client = Client(transport=transport, fetch_schema_from_transport=False)
+            logger.info("Goldsky Orderbook GraphQL client initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Goldsky clients: {e}")
-            raise APIError(f"Failed to initialize Goldsky clients: {e}")
+            logger.error(f"Failed to initialize Goldsky client: {e}")
+            raise APIError(f"Failed to initialize Goldsky client: {e}")
 
     async def cleanup(self) -> None:
         """Clean up resources."""
-        if self._http_client:
-            await self._http_client.aclose()
-
-        for client in self._clients.values():
+        if self._client:
             try:
-                # Close the transport session instead of the client
-                if hasattr(client.transport, 'close'):
-                    await client.transport.close()
+                if hasattr(self._client.transport, 'close'):
+                    await self._client.transport.close()
             except Exception as e:
                 logger.warning(f"Error closing GraphQL client: {e}")
 
-        self._clients.clear()
-        logger.info("Goldsky clients cleaned up")
+        self._client = None
+        logger.info("Goldsky client cleaned up")
 
     @api_circuit_breaker
     @retry_async(max_attempts=3, initial_delay=1.0)
     @rate_limit_async(calls_per_second=5.0)
-    async def get_recent_trades(self, limit: int = 100,
-                              start_timestamp: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get recent trades from the orderbook subgraph."""
+    async def get_large_recent_trades(
+        self,
+        min_value_usd: float = 10000.0,
+        limit: int = 100,
+        hours: int = 24
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent large trades from the orderbook subgraph.
 
-        # Use orderFilledEvents from the orderbook subgraph
+        Args:
+            min_value_usd: Minimum trade size in USD (default: 10,000)
+            limit: Maximum number of trades to return (default: 100)
+            hours: Number of hours to look back (default: 24)
+
+        Returns:
+            List of orderFilledEvents with large takerAmountFilled values
+        """
+        # Convert USD to base units (USDC uses 6 decimals, so 10,000 USD = 10,000,000,000 base units)
+        min_taker_amount = str(int(min_value_usd * 1_000_000))
+
+        # Calculate timestamp threshold
+        start_timestamp = int((datetime.now() - timedelta(hours=hours)).timestamp())
+
         query = gql("""
-            query getRecentTrades($limit: Int!, $startTimestamp: BigInt) {
+            query LargeRecentTrades($minTakerAmount: BigInt!, $startTimestamp: BigInt!, $limit: Int!) {
                 orderFilledEvents(
-                    first: $limit,
-                    orderBy: timestamp,
-                    orderDirection: desc,
                     where: {
+                        takerAmountFilled_gte: $minTakerAmount
                         timestamp_gte: $startTimestamp
                     }
+                    orderBy: timestamp
+                    orderDirection: desc
+                    first: $limit
                 ) {
                     id
                     transactionHash
+                    timestamp
                     maker
                     taker
                     makerAssetId
                     takerAssetId
                     makerAmountFilled
                     takerAmountFilled
-                    timestamp
+                    fee
                 }
             }
         """)
 
         variables = {
-            "limit": limit,
-            "startTimestamp": str(start_timestamp or int((datetime.now() - timedelta(hours=1)).timestamp()))
-        }
-
-        try:
-            result = await self._clients['orders'].execute_async(query, variable_values=variables)
-            # Return the events, converting to a format similar to the old response
-            events = result.get('orderFilledEvents', [])
-
-            # Transform to match expected format
-            trades = []
-            for event in events:
-                trades.append({
-                    'id': event['id'],
-                    'transactionHash': event['transactionHash'],
-                    'maker': event['maker'],
-                    'taker': event['taker'],
-                    'token': {'id': event['makerAssetId']},
-                    'price': str(float(event['takerAmountFilled']) / float(event['makerAmountFilled']) if float(event['makerAmountFilled']) > 0 else 0),
-                    'amount': event['makerAmountFilled'],
-                    'type': 'BUY',
-                    'timestamp': event['timestamp']
-                })
-
-            return trades
-        except Exception as e:
-            logger.error(f"Failed to fetch recent trades: {e}")
-            raise APIError(f"Failed to fetch recent trades: {e}")
-
-    @api_circuit_breaker
-    @retry_async(max_attempts=3, initial_delay=1.0)
-    @rate_limit_async(calls_per_second=5.0)
-    async def get_user_positions(self, user_address: str,
-                               limit: int = 50) -> List[Dict[str, Any]]:
-        """Get user positions from the positions subgraph."""
-
-        query = gql("""
-            query getUserPositions($userAddress: String!, $limit: Int!) {
-                positions(
-                    first: $limit,
-                    orderBy: timestamp,
-                    orderDirection: desc,
-                    where: {
-                        user: $userAddress
-                    }
-                ) {
-                    id
-                    user
-                    token {
-                        id
-                        outcome
-                        market {
-                            id
-                            question
-                            endDate
-                        }
-                    }
-                    balance
-                    price
-                    value
-                    timestamp
-                    transactionHash
-                }
-            }
-        """)
-
-        variables = {
-            "userAddress": user_address.lower(),
+            "minTakerAmount": min_taker_amount,
+            "startTimestamp": start_timestamp,
             "limit": limit
         }
 
         try:
-            result = await self._clients['positions'].execute_async(query, variable_values=variables)
-            return result.get('positions', [])
-        except Exception as e:
-            logger.error(f"Failed to fetch user positions: {e}")
-            raise APIError(f"Failed to fetch user positions: {e}")
+            if not self._client:
+                raise APIError("Client not initialized. Call initialize() first.")
 
-    @api_circuit_breaker
-    @retry_async(max_attempts=3, initial_delay=1.0)
-    @rate_limit_async(calls_per_second=3.0)
-    async def get_user_activity(self, user_address: str,
-                              hours: int = 24) -> List[Dict[str, Any]]:
-        """Get user activity from the activity subgraph."""
+            result = await self._client.execute_async(query, variable_values=variables)
+            events = result.get('orderFilledEvents', [])
 
-        start_timestamp = int((datetime.now() - timedelta(hours=hours)).timestamp())
+            logger.info(f"Found {len(events)} large trades (>${min_value_usd:,.0f} USD)")
+            return events
 
-        query = gql("""
-            query getUserActivity($userAddress: String!, $startTimestamp: BigInt!) {
-                activities(
-                    first: 100,
-                    orderBy: timestamp,
-                    orderDirection: desc,
-                    where: {
-                        user: $userAddress,
-                        timestamp_gte: $startTimestamp
-                    }
-                ) {
-                    id
-                    user
-                    type
-                    token {
-                        id
-                        outcome
-                        market {
-                            id
-                            question
-                        }
-                    }
-                    amount
-                    price
-                    timestamp
-                    transactionHash
-                    blockNumber
-                }
-            }
-        """)
-
-        variables = {
-            "userAddress": user_address.lower(),
-            "startTimestamp": start_timestamp
-        }
-
-        try:
-            result = await self._clients['activity'].execute_async(query, variable_values=variables)
-            return result.get('activities', [])
-        except Exception as e:
-            logger.error(f"Failed to fetch user activity: {e}")
-            raise APIError(f"Failed to fetch user activity: {e}")
-
-    @api_circuit_breaker
-    @retry_async(max_attempts=3, initial_delay=1.0)
-    @rate_limit_async(calls_per_second=5.0)
-    async def get_market_data(self, market_id: str) -> Optional[Dict[str, Any]]:
-        """Get market data from the base subgraph."""
-
-        query = gql("""
-            query getMarket($marketId: String!) {
-                market(id: $marketId) {
-                    id
-                    question
-                    description
-                    endDate
-                    outcomes
-                    liquidity
-                    volume
-                    tokens {
-                        id
-                        outcome
-                        price
-                        supply
-                    }
-                    createdAt
-                    lastUpdated
-                }
-            }
-        """)
-
-        variables = {
-            "marketId": market_id.lower()
-        }
-
-        try:
-            result = await self._clients['base'].execute_async(query, variable_values=variables)
-            return result.get('market')
-        except Exception as e:
-            logger.error(f"Failed to fetch market data: {e}")
-            raise APIError(f"Failed to fetch market data: {e}")
-
-    @api_circuit_breaker
-    @retry_async(max_attempts=3, initial_delay=1.0)
-    @rate_limit_async(calls_per_second=5.0)
-    async def get_large_trades(self, min_value_usd: float = 10000,
-                             hours: int = 24) -> List[Dict[str, Any]]:
-        """Get large trades that might indicate insider activity."""
-
-        start_timestamp = int((datetime.now() - timedelta(hours=hours)).timestamp())
-
-        query = gql("""
-            query getLargeTrades($startTimestamp: BigInt!, $minAmount: String!) {
-                orders(
-                    first: 100,
-                    orderBy: timestamp,
-                    orderDirection: desc,
-                    where: {
-                        timestamp_gte: $startTimestamp,
-                        amount_gte: $minAmount,
-                        type: "BUY"
-                    }
-                ) {
-                    id
-                    transactionHash
-                    maker
-                    taker
-                    token {
-                        id
-                        outcome
-                        market {
-                            id
-                            question
-                            description
-                            endDate
-                        }
-                    }
-                    price
-                    amount
-                    type
-                    timestamp
-                    blockNumber
-                }
-            }
-        """)
-
-        # Convert USD to token amount (simplified)
-        min_amount = str(min_value_usd / 1000)  # Rough conversion
-
-        variables = {
-            "startTimestamp": start_timestamp,
-            "minAmount": min_amount
-        }
-
-        try:
-            result = await self._clients['orders'].execute_async(query, variable_values=variables)
-            return result.get('orders', [])
         except Exception as e:
             logger.error(f"Failed to fetch large trades: {e}")
             raise APIError(f"Failed to fetch large trades: {e}")
 
-    @api_circuit_breaker
-    @retry_async(max_attempts=3, initial_delay=1.0)
-    @rate_limit_async(calls_per_second=3.0)
-    async def get_suspicious_patterns(self, hours: int = 24) -> Dict[str, List[Dict[str, Any]]]:
-        """Get data for analyzing suspicious trading patterns."""
+    def format_trade_usd(self, event: Dict[str, Any]) -> float:
+        """
+        Format takerAmountFilled from base units to USD.
 
-        start_timestamp = int((datetime.now() - timedelta(hours=hours)).timestamp())
+        Args:
+            event: OrderFilledEvent from subgraph
 
-        # Query for users with high concentration in recent trades
-        query = gql("""
-            query getSuspiciousPatterns($startTimestamp: BigInt!) {
-                # Get recent large orders
-                orders: orders(
-                    first: 200,
-                    orderBy: timestamp,
-                    orderDirection: desc,
-                    where: {
-                        timestamp_gte: $startTimestamp,
-                        type: "BUY"
-                    }
-                ) {
-                    id
-                    maker
-                    taker
-                    token {
-                        id
-                        outcome
-                        market {
-                            id
-                            question
-                            endDate
-                        }
-                    }
-                    price
-                    amount
-                    timestamp
-                    transactionHash
-                }
-            }
-        """)
-
-        variables = {
-            "startTimestamp": start_timestamp
-        }
-
+        Returns:
+            Trade size in USD
+        """
         try:
-            result = await self._clients['orders'].execute_async(query, variable_values=variables)
-            return result
-        except Exception as e:
-            logger.error(f"Failed to fetch suspicious patterns: {e}")
-            raise APIError(f"Failed to fetch suspicious patterns: {e}")
-
-    async def analyze_wallet_behavior(self, wallet_address: str) -> Dict[str, Any]:
-        """Comprehensive analysis of wallet behavior for insider detection."""
-
-        try:
-            # Get user activity
-            activities = await self.get_user_activity(wallet_address, hours=72)
-
-            # Get user positions
-            positions = await self.get_user_positions(wallet_address)
-
-            # Analyze patterns
-            analysis = {
-                'wallet_address': wallet_address,
-                'total_activities': len(activities),
-                'total_positions': len(positions),
-                'first_activity': None,
-                'last_activity': None,
-                'trading_frequency': 0,
-                'large_trades': [],
-                'new_wallet': False,
-                'suspicious_timing': []
-            }
-
-            if activities:
-                timestamps = [int(activity['timestamp']) for activity in activities]
-                analysis['first_activity'] = min(timestamps)
-                analysis['last_activity'] = max(timestamps)
-
-                # Calculate trading frequency (activities per hour)
-                time_span = (max(timestamps) - min(timestamps)) / 3600  # Convert to hours
-                if time_span > 0:
-                    analysis['trading_frequency'] = len(activities) / time_span
-
-                # Check if it's a new wallet (first activity within 24 hours)
-                if analysis['first_activity'] >= int((datetime.now() - timedelta(hours=24)).timestamp()):
-                    analysis['new_wallet'] = True
-
-                # Identify large trades
-                for activity in activities:
-                    if activity['type'] in ['BUY', 'SELL']:
-                        amount = float(activity['amount'])
-                        if amount * float(activity.get('price', 1)) >= settings.min_trade_size_usd / 1000:
-                            analysis['large_trades'].append(activity)
-
-            return analysis
-
-        except Exception as e:
-            logger.error(f"Failed to analyze wallet behavior: {e}")
-            raise APIError(f"Failed to analyze wallet behavior: {e}")
+            taker_amount = int(event.get('takerAmountFilled', 0))
+            # Convert from base units (6 decimals) to USD
+            return taker_amount / 1_000_000
+        except (ValueError, TypeError):
+            return 0.0
