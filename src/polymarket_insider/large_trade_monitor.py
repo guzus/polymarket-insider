@@ -101,10 +101,22 @@ class LargeTradeMonitor:
                 else:
                     taker_info = result
 
+            # Fallback: Try to get market info from Data API if Gamma API didn't find it
+            market_name = enriched_trade.get('market_question', 'Unknown Market')
+            if market_name == 'Unknown Market':
+                taker_asset_id = trade.get('takerAssetId', '')
+                if taker_asset_id:
+                    market_data = await self.data_api_client.get_market_by_token(taker_asset_id)
+                    if market_data:
+                        market_name = market_data.get('title', 'Unknown Market')
+                        outcome = market_data.get('outcome', 'Unknown')
+                        enriched_trade['market_question'] = market_name
+                        enriched_trade['taker_outcome'] = outcome
+                        logger.debug(f"Found market from Data API: {market_name}")
+
             # Calculate trade size in USD
             trade_size_usd = self.goldsky_client.format_trade_usd(enriched_trade)
 
-            market_name = enriched_trade.get('market_question', 'Unknown Market')
             trade_type = enriched_trade.get('trade_type', 'UNKNOWN')
             outcome = enriched_trade.get('taker_outcome', 'Unknown')
 

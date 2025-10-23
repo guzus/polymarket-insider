@@ -21,6 +21,7 @@ class DataAPIClient:
         """Initialize the Data API client."""
         self.base_url = "https://data-api.polymarket.com"
         self._trader_cache: Dict[str, Dict[str, Any]] = {}
+        self._market_cache: Dict[str, Dict[str, Any]] = {}  # Token ID to market info
         self._last_cache_update: Optional[datetime] = None
         self._cache_ttl_minutes = 30  # Cache trader info for 30 minutes
 
@@ -219,9 +220,101 @@ class DataAPIClient:
 
         return f"{display_name}{activity_summary}", trader_info.get('profile_url', '')
 
+    async def get_market_by_token(self, token_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get market information by token ID from Data API.
+
+        Args:
+            token_id: The token ID to look up
+
+        Returns:
+            Market information or None if not found
+        """
+        # Check cache first
+        if token_id in self._market_cache:
+            return self._market_cache[token_id]
+
+        try:
+            url = f"{self.base_url}/trades"
+            params = {
+                "asset": token_id,
+                "limit": 1,
+                "order": "desc",
+                "sortBy": "timestamp"
+            }
+
+            async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+
+                trades = response.json()
+                if trades:
+                    trade = trades[0]
+                    market_info = {
+                        'token_id': token_id,
+                        'title': trade.get('title', 'Unknown Market'),
+                        'slug': trade.get('slug', ''),
+                        'event_slug': trade.get('eventSlug', ''),
+                        'condition_id': trade.get('conditionId', ''),
+                        'outcome': trade.get('outcome', 'Unknown'),
+                        'outcome_index': trade.get('outcomeIndex', 0),
+                        'icon': trade.get('icon', ''),
+                        'profile_url': f"https://polymarket.com/event/{trade.get('eventSlug', '')}"
+                    }
+
+                    # Cache the market info
+                    self._market_cache[token_id] = market_info
+                    logger.debug(f"Found market for token {token_id[:20]}...: {market_info['title']}")
+                    return market_info
+
+        except httpx.HTTPError as e:
+            logger.warning(f"HTTP error fetching market for token {token_id[:20]}...: {e}")
+        except Exception as e:
+            logger.warning(f"Error fetching market for token {token_id[:20]}...: {e}")
+
+        return None
+
+    async def get_market_by_transaction(self, tx_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Get market information by transaction hash from Data API.
+
+        Args:
+            tx_hash: The transaction hash to look up
+
+        Returns:
+            Market information or None if not found
+        """
+        try:
+            url = f"{self.base_url}/trades"
+            params = {
+                "transactionHash": tx_hash,
+                "limit": 1,
+                "order": "desc",
+                "sortBy": "timestamp"
+            }
+
+            async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+
+                trades = response.json()
+                if trades:
+                    trade = trades[0]
+                    token_id = trade.get('asset', '')
+                    if token_id:
+                        return await self.get_market_by_token(token_id)
+
+        except httpx.HTTPError as e:
+            logger.warning(f"HTTP error fetching market for transaction {tx_hash[:10]}...: {e}")
+        except Exception as e:
+            logger.warning(f"Error fetching market for transaction {tx_hash[:10]}...: {e}")
+
+        return None
+
     def cleanup_cache(self) -> None:
         """Clean up old entries from the cache."""
         if self._last_cache_update and (datetime.now() - self._last_cache_update).total_seconds() > (self._cache_ttl_minutes * 60):
             self._trader_cache.clear()
+            self._market_cache.clear()
             self._last_cache_update = None
-            logger.info("Cleaned up trader info cache")
+            logger.info("Cleaned up trader and market info cache")
