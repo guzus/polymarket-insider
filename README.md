@@ -1,5 +1,7 @@
 # Polymarket Insider
 
+<img src="https://github.com/user-attachments/assets/4c21c7c4-440d-4f1f-a5fe-91128158aebf" width="50%">
+
 🔍 **Track suspicious large trades on Polymarket and get alerts via Telegram bot**
 
 Polymarket Insider monitors Polymarket for potentially manipulative trading activity, specifically looking for:
