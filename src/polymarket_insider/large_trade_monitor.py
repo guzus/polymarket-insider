@@ -108,8 +108,8 @@ class LargeTradeMonitor:
                 if trader_data and 'unique_markets_count' in trader_data:
                     taker_markets_count = trader_data['unique_markets_count']
 
-                    # Filter out traders with 10 or more markets
-                    if taker_markets_count >= 10:
+                    # Filter out traders with 5 or more markets
+                    if taker_markets_count >= 5:
                         logger.debug(f"Skipping trade for experienced trader ({taker_markets_count} markets): {taker_address[:10]}...{taker_address[-8:]} - TX: {tx_hash}")
                         return
 
