@@ -62,7 +62,7 @@ class TelegramAlertBot:
             await self.bot.send_message(
                 chat_id=self.chat_id,
                 text=message,
-                parse_mode="Markdown"
+                parse_mode=None  # Disable markdown to avoid parsing issues
             )
             return True
 
@@ -80,7 +80,7 @@ class TelegramAlertBot:
 
 📊 **Trade Details:**
 • Market: {trade.market_question or 'Unknown Market'}
-• Size: ${trade.usd_size:,.2f if trade.usd_size else 0}
+• Size: ${f"{trade.usd_size:,.2f}" if trade.usd_size is not None else "0.00"}
 • Price: ${trade.price:.4f}
 • Side: {trade.side}
 • Time: {trade.timestamp.strftime('%Y-%m-%d %H:%M:%S')} UTC
