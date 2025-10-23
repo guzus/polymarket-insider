@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 
-from telegram import Bot, Update
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from ..config.settings import settings
@@ -55,6 +55,34 @@ class TelegramAlertBot:
 
         except Exception as e:
             logger.error(f"Failed to send Telegram message: {e}")
+            return False
+
+    async def send_message_with_buttons(self, message: str, buttons: list[tuple[str, str]]) -> bool:
+        """Send a message with inline buttons."""
+        try:
+            # Create inline keyboard markup
+            keyboard = []
+            if buttons:
+                # Create rows of buttons (2 buttons per row for better layout)
+                for i in range(0, len(buttons), 2):
+                    row = []
+                    for text, url in buttons[i:i+2]:
+                        row.append(InlineKeyboardButton(text=text, url=url))
+                    keyboard.append(row)
+
+            reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+            await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode="Markdown",
+                reply_markup=reply_markup,
+                disable_web_page_preview=True
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send Telegram message with buttons: {e}")
             return False
 
     async def _handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

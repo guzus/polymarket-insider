@@ -197,22 +197,30 @@ class LargeTradeMonitor:
             # Format taker information (concise)
             if taker_info and taker_info != f"Unknown Trader (`{taker[:10]}...{taker[-8:]}`)":
                 taker_display = f"👤 {taker_info}"
-                if taker_profile_url:
-                    taker_display += f" [🔗]({taker_profile_url})"
             else:
-                taker_display = f"👤 `{taker[:10]}...{taker[-8:]}`"
-                if taker_profile_url:
-                    taker_display += f" [🔗]({taker_profile_url})"
+                taker_display = f"👤 [`{taker[:10]}...{taker[-8:]}`](https://polygonscan.com/address/{taker})"
+
+            # Always ensure we have a profile URL (generate default if not available)
+            if not taker_profile_url:
+                taker_profile_url = f"https://polymarket.com/profile/{taker.lower()}"
+
+            # Create Polymarket Analytics URL
+            analytics_url = f"https://polymarketanalytics.com/traders/{taker.lower()}"
 
             message = f"""{trade_emoji} **{trade_size_usd:,.0f} {trade_type} {outcome} @ ${avg_price_str}**
 {market_display}
 {time_str} UTC
 
-{taker_display}
-🔗 [View on Polygonscan](https://polygonscan.com/tx/{tx_hash})
-"""
+{taker_display}"""
 
-            await self.telegram_bot.send_message(message)
+            # Create buttons for the bottom of the message
+            buttons = [
+                ("👤 Profile", taker_profile_url),
+                ("📊 Analytics", analytics_url),
+                ("🔗 Scan", f"https://polygonscan.com/tx/{tx_hash}")
+            ]
+
+            await self.telegram_bot.send_message_with_buttons(message, buttons)
             logger.info(f"Sent large trade alert for TX: {tx_hash}")
 
         except Exception as e:
