@@ -151,10 +151,18 @@ class TelegramAlertBot:
         app = await self.initialize()
 
         logger.info("Starting Telegram bot polling")
-        await app.run_polling(drop_pending_updates=True)
+        # Initialize and start the application
+        await app.initialize()
+        await app.start()
+        # Start polling in the background without blocking
+        asyncio.create_task(app.updater.start_polling(drop_pending_updates=True))
 
     async def stop(self) -> None:
         """Stop the bot."""
         if self._app:
-            await self._app.stop()
+            try:
+                await self._app.stop()
+                await self._app.shutdown()
+            except Exception as e:
+                logger.warning(f"Error stopping Telegram bot: {e}")
             logger.info("Telegram bot stopped")

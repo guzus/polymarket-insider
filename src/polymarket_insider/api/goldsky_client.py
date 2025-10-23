@@ -47,7 +47,8 @@ class GoldskyClient:
             }
 
             for name, url in transport_configs.items():
-                transport = HTTPXAsyncTransport(url=url, client=self._http_client)
+                # Create transport without sharing the http client
+                transport = HTTPXAsyncTransport(url=url, timeout=settings.http_timeout)
                 self._clients[name] = Client(transport=transport, fetch_schema_from_transport=True)
 
             logger.info("Goldsky GraphQL clients initialized successfully")
@@ -62,7 +63,12 @@ class GoldskyClient:
             await self._http_client.aclose()
 
         for client in self._clients.values():
-            await client.close_async()
+            try:
+                # Close the transport session instead of the client
+                if hasattr(client.transport, 'close'):
+                    await client.transport.close()
+            except Exception as e:
+                logger.warning(f"Error closing GraphQL client: {e}")
 
         self._clients.clear()
         logger.info("Goldsky clients cleaned up")

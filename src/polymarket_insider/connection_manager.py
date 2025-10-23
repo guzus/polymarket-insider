@@ -66,7 +66,9 @@ class ConnectionManager:
                 markets_data = response.json()
                 markets = {}
 
-                for market_data in markets_data:
+                # API returns {"data": [...]} format
+                market_list = markets_data.get("data", []) if isinstance(markets_data, dict) else markets_data
+                for market_data in market_list:
                     tokens = [
                         Token(
                             token_id=token["token_id"],
