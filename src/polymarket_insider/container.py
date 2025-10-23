@@ -7,6 +7,7 @@ from .config.settings import settings
 from .config.validator import validate_configuration
 from .bot.telegram_bot import TelegramAlertBot
 from .api.goldsky_client import GoldskyClient
+from .api.gamma_client import GammaClient
 from .large_trade_monitor import LargeTradeMonitor
 from .utils.logger import setup_logger
 
@@ -42,6 +43,10 @@ class Container:
         await goldsky_client.initialize()
         self._instances['goldsky_client'] = goldsky_client
 
+        # Initialize Gamma client
+        gamma_client = GammaClient()
+        self._instances['gamma_client'] = gamma_client
+
         # Initialize Telegram bot
         telegram_bot = TelegramAlertBot()
         await telegram_bot.initialize()
@@ -50,6 +55,7 @@ class Container:
         # Initialize large trade monitor
         large_trade_monitor = LargeTradeMonitor(
             goldsky_client=goldsky_client,
+            gamma_client=gamma_client,
             telegram_bot=telegram_bot
         )
         self._instances['large_trade_monitor'] = large_trade_monitor
@@ -90,6 +96,10 @@ class Container:
     def get_goldsky_client(self) -> GoldskyClient:
         """Get the Goldsky client instance."""
         return self._get_instance('goldsky_client', GoldskyClient)
+
+    def get_gamma_client(self) -> GammaClient:
+        """Get the Gamma client instance."""
+        return self._get_instance('gamma_client', GammaClient)
 
     def get_large_trade_monitor(self) -> LargeTradeMonitor:
         """Get the large trade monitor instance."""

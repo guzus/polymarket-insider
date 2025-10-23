@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Set, Dict, Any
 
 from .api.goldsky_client import GoldskyClient
+from .api.gamma_client import GammaClient
 from .bot.telegram_bot import TelegramAlertBot
 from .config.settings import settings
 from .utils.logger import setup_logger
@@ -13,11 +14,12 @@ logger = setup_logger(__name__)
 
 
 class LargeTradeMonitor:
-    """Monitor for tracking large trades (>$10k) on Polymarket."""
+    """Monitor for tracking large trades (>$100k) on Polymarket."""
 
-    def __init__(self, goldsky_client: GoldskyClient, telegram_bot: TelegramAlertBot):
+    def __init__(self, goldsky_client: GoldskyClient, gamma_client: GammaClient, telegram_bot: TelegramAlertBot):
         """Initialize the large trade monitor."""
         self.goldsky_client = goldsky_client
+        self.gamma_client = gamma_client
         self.telegram_bot = telegram_bot
         self.running = False
 
@@ -83,13 +85,20 @@ class LargeTradeMonitor:
             # Mark as processed
             self.processed_tx_hashes.add(tx_hash)
 
-            # Calculate trade size in USD
-            trade_size_usd = self.goldsky_client.format_trade_usd(trade)
+            # Enrich trade data with market information
+            enriched_trade = await self.gamma_client.enrich_trade_data(trade)
 
-            logger.info(f"New large trade detected: ${trade_size_usd:,.2f} - TX: {tx_hash}")
+            # Calculate trade size in USD
+            trade_size_usd = self.goldsky_client.format_trade_usd(enriched_trade)
+
+            market_name = enriched_trade.get('market_question', 'Unknown Market')
+            trade_type = enriched_trade.get('trade_type', 'UNKNOWN')
+            outcome = enriched_trade.get('taker_outcome', 'Unknown')
+
+            logger.info(f"New large trade detected: ${trade_size_usd:,.2f} - {trade_type} {outcome} - {market_name} - TX: {tx_hash}")
 
             # Send Telegram alert
-            await self._send_alert(trade, trade_size_usd)
+            await self._send_alert(enriched_trade, trade_size_usd)
 
         except Exception as e:
             logger.error(f"Error processing trade: {e}")
@@ -100,43 +109,47 @@ class LargeTradeMonitor:
             # Extract trade details
             tx_hash = trade.get('transactionHash', 'unknown')
             timestamp = int(trade.get('timestamp', 0))
-            maker = trade.get('maker', 'unknown')
             taker = trade.get('taker', 'unknown')
-            maker_asset_id = trade.get('makerAssetId', 'unknown')
             taker_asset_id = trade.get('takerAssetId', 'unknown')
-            maker_amount = trade.get('makerAmountFilled', '0')
             taker_amount = trade.get('takerAmountFilled', '0')
             fee = trade.get('fee', '0')
+
+            # Extract enriched data
+            market_name = trade.get('market_question', 'Unknown Market')
+            trade_type = trade.get('trade_type', 'UNKNOWN')
+            outcome = trade.get('taker_outcome', 'Unknown')
 
             # Format timestamp
             time_str = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
             # Format amounts
             try:
-                maker_amount_formatted = int(maker_amount) / 1_000_000
                 taker_amount_formatted = int(taker_amount) / 1_000_000
                 fee_formatted = int(fee) / 1_000_000
             except (ValueError, TypeError):
-                maker_amount_formatted = 0
                 taker_amount_formatted = 0
                 fee_formatted = 0
 
-            message = f"""🚨 **LARGE TRADE ALERT** 🚨
+            # Create emoji for trade type
+            trade_emoji = "🟢" if trade_type == "BUY" else "🔴" if trade_type == "SELL" else "⚪"
+
+            # Truncate market name if too long
+            market_display = market_name[:60] + "..." if len(market_name) > 60 else market_name
+
+            message = f"""{trade_emoji} **LARGE TRADE ALERT** {trade_emoji}
 
 📊 **Trade Details:**
 • Size: ${trade_size_usd:,.2f}
-• Taker Amount: ${taker_amount_formatted:,.2f}
-• Maker Amount: {maker_amount_formatted:,.2f} tokens
+• Action: {trade_type} {outcome}
+• Amount: ${taker_amount_formatted:,.2f}
 • Fee: ${fee_formatted:,.2f}
 • Time: {time_str} UTC
 
-👥 **Participants:**
-• Maker: `{maker[:10]}...{maker[-8:]}`
-• Taker: `{taker[:10]}...{taker[-8:]}`
+🎯 **Market:**
+• {market_display}
 
-🔖 **Assets:**
-• Maker Asset: `{maker_asset_id[:10]}...{maker_asset_id[-8:]}`
-• Taker Asset: `{taker_asset_id[:10]}...{taker_asset_id[-8:]}`
+👤 **Taker:**
+• `{taker[:10]}...{taker[-8:]}`
 
 🔗 **Transaction:** [View on Polygonscan](https://polygonscan.com/tx/{tx_hash})
 """
