@@ -23,6 +23,7 @@ class TelegramAlertBot:
         self.chat_id = settings.telegram_chat_id
         self.bot = Bot(token=self.bot_token)
         self._app: Optional[Application] = None
+        self._polling_task: Optional[asyncio.Task] = None
 
     async def initialize(self) -> Application:
         """Initialize the Telegram application."""
@@ -154,15 +155,39 @@ class TelegramAlertBot:
         # Initialize and start the application
         await app.initialize()
         await app.start()
-        # Start polling in the background without blocking
-        asyncio.create_task(app.updater.start_polling(drop_pending_updates=True))
+
+        # Start polling in the background with error handling
+        async def polling_with_error_handling():
+            try:
+                await app.updater.start_polling(drop_pending_updates=True)
+            except asyncio.CancelledError:
+                logger.info("Telegram bot polling cancelled")
+                raise
+            except Exception as e:
+                logger.warning(f"Telegram bot polling error (this is usually a network issue): {e}")
+
+        self._polling_task = asyncio.create_task(polling_with_error_handling())
 
     async def stop(self) -> None:
         """Stop the bot."""
+        # Stop the application (which will stop the updater and its internal tasks)
         if self._app:
             try:
+                # Stop the updater first to cancel internal polling tasks
+                if self._app.updater.running:
+                    await self._app.updater.stop()
+
+                # Then stop and shutdown the application
                 await self._app.stop()
                 await self._app.shutdown()
             except Exception as e:
                 logger.warning(f"Error stopping Telegram bot: {e}")
             logger.info("Telegram bot stopped")
+
+        # Cancel our wrapper task if it's still running
+        if self._polling_task and not self._polling_task.done():
+            self._polling_task.cancel()
+            try:
+                await self._polling_task
+            except (asyncio.CancelledError, Exception):
+                pass
