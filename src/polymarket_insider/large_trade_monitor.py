@@ -90,6 +90,12 @@ class LargeTradeMonitor:
             # Enrich trade data with market information
             enriched_trade = await self.gamma_client.enrich_trade_data(trade)
 
+            # Get market name and filter out unwanted markets
+            market_name = enriched_trade.get('market_question', 'Unknown Market')
+            if "Up or Down" in market_name or "Up Or Down" in market_name:
+                logger.debug(f"Skipping trade for filtered market: {market_name} - TX: {tx_hash}")
+                return
+
             # Get taker information
             taker_address = trade.get('taker', '')
             taker_info = None
@@ -102,7 +108,6 @@ class LargeTradeMonitor:
                     taker_info = result
 
             # Fallback: Try to get market info from Data API if Gamma API didn't find it
-            market_name = enriched_trade.get('market_question', 'Unknown Market')
             if market_name == 'Unknown Market':
                 taker_asset_id = trade.get('takerAssetId', '')
                 if taker_asset_id:
@@ -113,6 +118,11 @@ class LargeTradeMonitor:
                         enriched_trade['market_question'] = market_name
                         enriched_trade['taker_outcome'] = outcome
                         logger.debug(f"Found market from Data API: {market_name}")
+
+            # Check again after fallback in case Data API provided an "Up Or Down" market
+            if "Up or Down" in market_name or "Up Or Down" in market_name:
+                logger.debug(f"Skipping trade for filtered market (after fallback): {market_name} - TX: {tx_hash}")
+                return
 
             # Calculate trade size in USD
             trade_size_usd = self.goldsky_client.format_trade_usd(enriched_trade)
@@ -146,6 +156,7 @@ class LargeTradeMonitor:
             trade_type = trade.get('trade_type', 'UNKNOWN')
             outcome = trade.get('taker_outcome', 'Unknown')
 
+        
             # Format timestamp
             time_str = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
