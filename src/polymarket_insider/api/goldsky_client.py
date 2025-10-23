@@ -49,7 +49,8 @@ class GoldskyClient:
             for name, url in transport_configs.items():
                 # Create transport without sharing the http client
                 transport = HTTPXAsyncTransport(url=url, timeout=settings.http_timeout)
-                self._clients[name] = Client(transport=transport, fetch_schema_from_transport=True)
+                # Disable schema fetching to avoid issues with subgraph introspection
+                self._clients[name] = Client(transport=transport, fetch_schema_from_transport=False)
 
             logger.info("Goldsky GraphQL clients initialized successfully")
 
@@ -78,51 +79,58 @@ class GoldskyClient:
     @rate_limit_async(calls_per_second=5.0)
     async def get_recent_trades(self, limit: int = 100,
                               start_timestamp: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get recent trades from the orders subgraph."""
+        """Get recent trades from the orderbook subgraph."""
 
+        # Use orderFilledEvents from the orderbook subgraph
         query = gql("""
             query getRecentTrades($limit: Int!, $startTimestamp: BigInt) {
-                orders(
+                orderFilledEvents(
                     first: $limit,
                     orderBy: timestamp,
                     orderDirection: desc,
                     where: {
-                        timestamp_gte: $startTimestamp,
-                        type: "BUY"
+                        timestamp_gte: $startTimestamp
                     }
                 ) {
                     id
                     transactionHash
                     maker
                     taker
-                    token {
-                        id
-                        outcome
-                        market {
-                            id
-                            question
-                            description
-                            endDate
-                            outcomes
-                        }
-                    }
-                    price
-                    amount
-                    type
+                    makerAssetId
+                    takerAssetId
+                    makerAmountFilled
+                    takerAmountFilled
                     timestamp
-                    blockNumber
                 }
             }
         """)
 
         variables = {
             "limit": limit,
-            "startTimestamp": start_timestamp or int((datetime.now() - timedelta(hours=1)).timestamp())
+            "startTimestamp": str(start_timestamp or int((datetime.now() - timedelta(hours=1)).timestamp()))
         }
 
         try:
             result = await self._clients['orders'].execute_async(query, variable_values=variables)
-            return result.get('orders', [])
+            # Return the events, converting to a format similar to the old response
+            events = result.get('orderFilledEvents', [])
+
+            # Transform to match expected format
+            trades = []
+            for event in events:
+                trades.append({
+                    'id': event['id'],
+                    'transactionHash': event['transactionHash'],
+                    'maker': event['maker'],
+                    'taker': event['taker'],
+                    'token': {'id': event['makerAssetId']},
+                    'price': str(float(event['takerAmountFilled']) / float(event['makerAmountFilled']) if float(event['makerAmountFilled']) > 0 else 0),
+                    'amount': event['makerAmountFilled'],
+                    'type': 'BUY',
+                    'timestamp': event['timestamp']
+                })
+
+            return trades
         except Exception as e:
             logger.error(f"Failed to fetch recent trades: {e}")
             raise APIError(f"Failed to fetch recent trades: {e}")

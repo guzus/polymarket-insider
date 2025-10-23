@@ -21,19 +21,19 @@ class Settings(BaseSettings):
 
     # Goldsky Subgraph Configuration
     goldsky_api_url: str = Field(
-        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market",
+        default="https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/orderbook-subgraph/0.0.1/gn",
         description="Goldsky API base URL for Polymarket subgraph"
     )
     goldsky_orders_url: str = Field(
-        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-orders",
+        default="https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/orderbook-subgraph/0.0.1/gn",
         description="Goldsky Orders subgraph URL"
     )
     goldsky_positions_url: str = Field(
-        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-positions",
+        default="https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/positions-subgraph/0.0.7/gn",
         description="Goldsky Positions subgraph URL"
     )
     goldsky_activity_url: str = Field(
-        default="https://api.goldsky.com/api/public/project_clqj02d9h3t099wqv50zr5w7f/subgraphs/poly-market-activity",
+        default="https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/activity-subgraph/0.0.4/gn",
         description="Goldsky Activity subgraph URL"
     )
     http_timeout: int = Field(
